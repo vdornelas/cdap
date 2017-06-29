@@ -267,13 +267,13 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     history = countService.getHistory(ProgramRunStatus.KILLED);
     Assert.assertEquals(0, history.size());
 
-    // requesting with either RUNNING or ALL will return one record
+    // requesting with ProgramRunStatus.RUNNING will return one record
     Tasks.waitFor(1, new Callable<Integer>() {
       @Override
       public Integer call() throws Exception {
         return countService.getHistory(ProgramRunStatus.RUNNING).size();
       }
-    }, 5, TimeUnit.SECONDS);
+    }, 10, TimeUnit.SECONDS);
 
     history = countService.getHistory(ProgramRunStatus.STARTING);
     Assert.assertEquals(1, history.size());

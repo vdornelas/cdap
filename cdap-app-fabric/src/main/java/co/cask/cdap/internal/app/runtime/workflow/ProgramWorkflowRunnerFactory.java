@@ -26,8 +26,8 @@ import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramRunnerFactory;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.conf.CConfiguration;
+import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,18 +49,18 @@ final class ProgramWorkflowRunnerFactory {
   private final ProgramRunnerFactory programRunnerFactory;
   private final Program workflowProgram;
   private final ProgramOptions workflowProgramOptions;
-  private final RuntimeStore store;
+  private final MessagingService messagingService;
 
   ProgramWorkflowRunnerFactory(CConfiguration cConf, WorkflowSpecification workflowSpec,
                                ProgramRunnerFactory programRunnerFactory,
                                Program workflowProgram, ProgramOptions workflowProgramOptions,
-                               RuntimeStore store) {
+                               MessagingService messagingService) {
     this.cConf = cConf;
     this.workflowSpec = workflowSpec;
     this.programRunnerFactory = programRunnerFactory;
     this.workflowProgram = workflowProgram;
     this.workflowProgramOptions = workflowProgramOptions;
-    this.store = store;
+    this.messagingService = messagingService;
   }
 
   /**
@@ -80,11 +80,11 @@ final class ProgramWorkflowRunnerFactory {
         case MAPREDUCE:
           return new DefaultProgramWorkflowRunner(cConf, workflowProgram, workflowProgramOptions, programRunnerFactory,
                                                   workflowSpec, token, nodeId, nodeStates, ProgramType.MAPREDUCE,
-                                                  store);
+                                                  messagingService);
         case SPARK:
           return new DefaultProgramWorkflowRunner(cConf, workflowProgram, workflowProgramOptions, programRunnerFactory,
                                                   workflowSpec, token, nodeId, nodeStates, ProgramType.SPARK,
-                                                  store);
+                                                  messagingService);
         default:
           LOG.debug("No workflow program runner found for this program");
       }

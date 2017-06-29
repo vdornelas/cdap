@@ -1772,6 +1772,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       ProgramRunStatus runStatus = (status == null) ? ProgramRunStatus.ALL :
         ProgramRunStatus.valueOf(status.toUpperCase());
 
+      System.out.println("GET HISTORY OF PROGRAM " + status);
+
       Collection<RunRecord> records = Collections2.transform(
         store.getRuns(programId, runStatus, start, end, limit).values(),
         CONVERT_TO_RUN_RECORD

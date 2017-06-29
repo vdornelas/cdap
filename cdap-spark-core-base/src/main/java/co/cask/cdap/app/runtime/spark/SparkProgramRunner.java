@@ -32,7 +32,7 @@ import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.runtime.spark.submit.DistributedSparkSubmitter;
 import co.cask.cdap.app.runtime.spark.submit.LocalSparkSubmitter;
 import co.cask.cdap.app.runtime.spark.submit.SparkSubmitter;
-import co.cask.cdap.app.store.RuntimeStore;
+import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.lang.FilterClassLoader;
@@ -40,6 +40,7 @@ import co.cask.cdap.common.lang.InstantiatorFactory;
 import co.cask.cdap.data.ProgramContextAware;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractProgramRunnerWithPlugin;
 import co.cask.cdap.internal.app.runtime.BasicProgramContext;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
@@ -47,7 +48,6 @@ import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
 import co.cask.cdap.internal.app.runtime.workflow.NameMappedDatasetFramework;
 import co.cask.cdap.internal.app.runtime.workflow.WorkflowProgramInfo;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
@@ -95,7 +95,7 @@ final class SparkProgramRunner extends AbstractProgramRunnerWithPlugin
   private final MetricsCollectionService metricsCollectionService;
   private final DiscoveryServiceClient discoveryServiceClient;
   private final StreamAdmin streamAdmin;
-  private final RuntimeStore runtimeStore;
+  private final Store runtimeStore;
   private final SecureStore secureStore;
   private final SecureStoreManager secureStoreManager;
   private final AuthorizationEnforcer authorizationEnforcer;
@@ -107,7 +107,7 @@ final class SparkProgramRunner extends AbstractProgramRunnerWithPlugin
                      TransactionSystemClient txClient, DatasetFramework datasetFramework,
                      MetricsCollectionService metricsCollectionService,
                      DiscoveryServiceClient discoveryServiceClient, StreamAdmin streamAdmin,
-                     RuntimeStore runtimeStore, SecureStore secureStore, SecureStoreManager secureStoreManager,
+                     Store runtimeStore, SecureStore secureStore, SecureStoreManager secureStoreManager,
                      AuthorizationEnforcer authorizationEnforcer, AuthenticationContext authenticationContext,
                      MessagingService messagingService) {
     super(cConf);
@@ -194,7 +194,7 @@ final class SparkProgramRunner extends AbstractProgramRunnerWithPlugin
                                                             runtimeContext, submitter);
 
       sparkRuntimeService.addListener(createRuntimeServiceListener(closeables), Threads.SAME_THREAD_EXECUTOR);
-      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
         .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
       ProgramController controller = new SparkProgramController(sparkRuntimeService, runtimeContext,
                                                                 twillRunId, programStateWriter);

@@ -26,10 +26,10 @@ import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramRunner;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.data.ProgramContextAware;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractProgramRunnerWithPlugin;
 import co.cask.cdap.internal.app.runtime.BasicProgramContext;
 import co.cask.cdap.internal.app.runtime.ProgramControllerServiceAdapter;
@@ -38,7 +38,6 @@ import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.artifact.DefaultArtifactManager;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
 import co.cask.cdap.internal.app.services.ServiceHttpServer;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
@@ -64,7 +63,6 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
   private final DiscoveryServiceClient discoveryServiceClient;
   private final TransactionSystemClient txClient;
   private final ServiceAnnouncer serviceAnnouncer;
-  private final RuntimeStore runtimeStore;
   private final SecureStore secureStore;
   private final SecureStoreManager secureStoreManager;
   private final MessagingService messagingService;
@@ -74,7 +72,7 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
   public ServiceProgramRunner(CConfiguration cConf, MetricsCollectionService metricsCollectionService,
                               DatasetFramework datasetFramework, DiscoveryServiceClient discoveryServiceClient,
                               TransactionSystemClient txClient, ServiceAnnouncer serviceAnnouncer,
-                              RuntimeStore runtimeStore, SecureStore secureStore, SecureStoreManager secureStoreManager,
+                              SecureStore secureStore, SecureStoreManager secureStoreManager,
                               MessagingService messagingService,
                               DefaultArtifactManager defaultArtifactManager) {
     super(cConf);
@@ -83,7 +81,6 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
     this.discoveryServiceClient = discoveryServiceClient;
     this.txClient = txClient;
     this.serviceAnnouncer = serviceAnnouncer;
-    this.runtimeStore = runtimeStore;
     this.secureStore = secureStore;
     this.secureStoreManager = secureStoreManager;
     this.messagingService = messagingService;
@@ -141,7 +138,7 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
         }
       }, Threads.SAME_THREAD_EXECUTOR);
 
-      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
         .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
       ProgramController controller = new ServiceProgramControllerAdapter(component, program.getId().run(runId),
                                                                          twillRunId, programStateWriter,

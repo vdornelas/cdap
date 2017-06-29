@@ -27,7 +27,6 @@ import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.lang.InstantiatorFactory;
@@ -37,6 +36,7 @@ import co.cask.cdap.common.namespace.NamespacedLocationFactory;
 import co.cask.cdap.data.ProgramContextAware;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractProgramRunnerWithPlugin;
 import co.cask.cdap.internal.app.runtime.BasicProgramContext;
 import co.cask.cdap.internal.app.runtime.DataSetFieldSetter;
@@ -46,7 +46,6 @@ import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
 import co.cask.cdap.internal.app.runtime.workflow.NameMappedDatasetFramework;
 import co.cask.cdap.internal.app.runtime.workflow.WorkflowProgramInfo;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.internal.lang.Reflections;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
@@ -90,7 +89,6 @@ public class MapReduceProgramRunner extends AbstractProgramRunnerWithPlugin {
   private final NamespacedLocationFactory locationFactory;
   private final MetricsCollectionService metricsCollectionService;
   private final DatasetFramework datasetFramework;
-  private final RuntimeStore runtimeStore;
   private final TransactionSystemClient txSystemClient;
   private final DiscoveryServiceClient discoveryServiceClient;
   private final SecureStore secureStore;
@@ -107,7 +105,7 @@ public class MapReduceProgramRunner extends AbstractProgramRunnerWithPlugin {
                                 TransactionSystemClient txSystemClient,
                                 MetricsCollectionService metricsCollectionService,
                                 DiscoveryServiceClient discoveryServiceClient,
-                                RuntimeStore runtimeStore, SecureStore secureStore,
+                                SecureStore secureStore,
                                 SecureStoreManager secureStoreManager,
                                 AuthorizationEnforcer authorizationEnforcer,
                                 AuthenticationContext authenticationContext,
@@ -122,7 +120,6 @@ public class MapReduceProgramRunner extends AbstractProgramRunnerWithPlugin {
     this.datasetFramework = datasetFramework;
     this.txSystemClient = txSystemClient;
     this.discoveryServiceClient = discoveryServiceClient;
-    this.runtimeStore = runtimeStore;
     this.secureStore = secureStore;
     this.secureStoreManager = secureStoreManager;
     this.authorizationEnforcer = authorizationEnforcer;
@@ -202,7 +199,7 @@ public class MapReduceProgramRunner extends AbstractProgramRunnerWithPlugin {
 
       mapReduceRuntimeService.addListener(createRuntimeServiceListener(closeables), Threads.SAME_THREAD_EXECUTOR);
 
-      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
         .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
       ProgramController controller = new MapReduceProgramController(mapReduceRuntimeService, context,
                                                                     twillRunId, programStateWriter);
