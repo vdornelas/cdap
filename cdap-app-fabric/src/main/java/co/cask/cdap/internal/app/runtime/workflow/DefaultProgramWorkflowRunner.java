@@ -29,7 +29,6 @@ import co.cask.cdap.app.runtime.ProgramRunner;
 import co.cask.cdap.app.runtime.ProgramRunnerFactory;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.runtime.WorkflowTokenProvider;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.internal.app.runtime.AbstractListener;
@@ -38,6 +37,7 @@ import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.SimpleProgramOptions;
 import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
+import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
@@ -75,12 +75,12 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
   private final ProgramRunnerFactory programRunnerFactory;
   private final WorkflowToken token;
   private final ProgramType programType;
-  private final RuntimeStore store;
+  private final MessagingService messagingService;
 
   DefaultProgramWorkflowRunner(CConfiguration cConf, Program workflowProgram, ProgramOptions workflowProgramOptions,
                                ProgramRunnerFactory programRunnerFactory, WorkflowSpecification workflowSpec,
                                WorkflowToken token, String nodeId, Map<String, WorkflowNodeState> nodeStates,
-                               ProgramType programType, RuntimeStore store) {
+                               ProgramType programType, MessagingService messagingService) {
     this.cConf = cConf;
     this.workflowProgram = workflowProgram;
     this.workflowProgramOptions = workflowProgramOptions;
@@ -90,7 +90,7 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     this.nodeId = nodeId;
     this.nodeStates = nodeStates;
     this.programType = programType;
-    this.store = store;
+    this.messagingService = messagingService;
   }
 
   @Override
@@ -152,7 +152,7 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     // Publish the program's starting state
     RunId runId = ProgramRunners.getRunId(options);
     String twillRunId = options.getArguments().getOption(ProgramOptionConstants.TWILL_RUN_ID);
-    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(store)
+    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(cConf, messagingService)
       .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
     programStateWriter.start(program.getId().run(runId), twillRunId, System.currentTimeMillis());
 

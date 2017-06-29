@@ -17,7 +17,7 @@
 package co.cask.cdap.internal.app.store;
 
 import co.cask.cdap.app.runtime.ProgramStateWriter;
-import co.cask.cdap.app.store.RuntimeStore;
+import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.service.Retries;
 import co.cask.cdap.common.service.RetryStrategies;
@@ -35,11 +35,11 @@ import javax.annotation.Nullable;
  * An implementation of the ProgramStateWriter that persists directly to the store
  */
 public final class DirectStoreProgramStateWriter implements ProgramStateWriter {
-  private final RuntimeStore store;
+  private final Store store;
   private Map<String, String> userArguments = ImmutableMap.of();
   private Map<String, String> systemArguments = ImmutableMap.of();
 
-  public DirectStoreProgramStateWriter(RuntimeStore store) {
+  public DirectStoreProgramStateWriter(Store store) {
     this.store = store;
   }
 

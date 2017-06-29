@@ -28,17 +28,17 @@ import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramRunner;
 import co.cask.cdap.app.runtime.ProgramRunnerFactory;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
-import co.cask.cdap.app.store.RuntimeStore;
+import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.data.ProgramContextAware;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractProgramRunnerWithPlugin;
 import co.cask.cdap.internal.app.runtime.BasicProgramContext;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
@@ -71,7 +71,7 @@ public class WorkflowProgramRunner extends AbstractProgramRunnerWithPlugin {
   private final DatasetFramework datasetFramework;
   private final DiscoveryServiceClient discoveryServiceClient;
   private final TransactionSystemClient txClient;
-  private final RuntimeStore runtimeStore;
+  private final Store store;
   private final SecureStore secureStore;
   private final SecureStoreManager secureStoreManager;
   private final MessagingService messagingService;
@@ -82,7 +82,7 @@ public class WorkflowProgramRunner extends AbstractProgramRunnerWithPlugin {
                                @Named(Constants.Service.MASTER_SERVICES_BIND_ADDRESS) InetAddress hostname,
                                MetricsCollectionService metricsCollectionService, DatasetFramework datasetFramework,
                                DiscoveryServiceClient discoveryServiceClient, TransactionSystemClient txClient,
-                               RuntimeStore runtimeStore, CConfiguration cConf, SecureStore secureStore,
+                               Store store, CConfiguration cConf, SecureStore secureStore,
                                SecureStoreManager secureStoreManager, MessagingService messagingService) {
     super(cConf);
     this.programRunnerFactory = programRunnerFactory;
@@ -92,7 +92,7 @@ public class WorkflowProgramRunner extends AbstractProgramRunnerWithPlugin {
     this.datasetFramework = datasetFramework;
     this.discoveryServiceClient = discoveryServiceClient;
     this.txClient = txClient;
-    this.runtimeStore = runtimeStore;
+    this.store = store;
     this.secureStore = secureStore;
     this.secureStoreManager = secureStoreManager;
     this.messagingService = messagingService;
@@ -131,12 +131,12 @@ public class WorkflowProgramRunner extends AbstractProgramRunnerWithPlugin {
 
       WorkflowDriver driver = new WorkflowDriver(program, options, hostname, workflowSpec, programRunnerFactory,
                                                  metricsCollectionService, datasetFramework, discoveryServiceClient,
-                                                 txClient, runtimeStore, cConf, pluginInstantiator,
+                                                 txClient, store, cConf, pluginInstantiator,
                                                  secureStore, secureStoreManager, messagingService);
 
       // Controller needs to be created before starting the driver so that the state change of the driver
       // service can be fully captured by the controller.
-      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
         .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
       ProgramController controller = new WorkflowProgramController(program.getId().run(runId), twillRunId,
                                                                    programStateWriter, driver, serviceAnnouncer);

@@ -20,10 +20,10 @@ import co.cask.cdap.api.app.ApplicationSpecification;
 import co.cask.cdap.api.artifact.ArtifactClasses;
 import co.cask.cdap.api.artifact.ArtifactScope;
 import co.cask.cdap.api.artifact.ArtifactVersion;
-import co.cask.cdap.api.workflow.WorkflowToken;
+import co.cask.cdap.api.messaging.TopicAlreadyExistsException;
+import co.cask.cdap.api.messaging.TopicNotFoundException;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.program.ProgramDescriptor;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.ArtifactNotFoundException;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
@@ -37,16 +37,18 @@ import co.cask.cdap.internal.app.runtime.artifact.ArtifactDescriptor;
 import co.cask.cdap.internal.app.runtime.artifact.ArtifactDetail;
 import co.cask.cdap.internal.app.runtime.artifact.ArtifactMeta;
 import co.cask.cdap.internal.app.runtime.artifact.ArtifactRepository;
-import co.cask.cdap.proto.BasicThrowable;
+import co.cask.cdap.messaging.MessageFetcher;
+import co.cask.cdap.messaging.MessagingService;
+import co.cask.cdap.messaging.RollbackDetail;
+import co.cask.cdap.messaging.StoreRequest;
+import co.cask.cdap.messaging.TopicMetadata;
 import co.cask.cdap.proto.ProgramLiveInfo;
-import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
-import co.cask.cdap.proto.WorkflowNodeStateDetail;
 import co.cask.cdap.proto.id.ApplicationId;
 import co.cask.cdap.proto.id.ArtifactId;
 import co.cask.cdap.proto.id.NamespaceId;
 import co.cask.cdap.proto.id.ProgramId;
-import co.cask.cdap.proto.id.ProgramRunId;
+import co.cask.cdap.proto.id.TopicId;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.Service;
@@ -87,7 +89,7 @@ public class AbstractProgramRuntimeServiceTest {
     ProgramRunnerFactory runnerFactory = createProgramRunnerFactory();
     final Program program = createDummyProgram();
     final ProgramRuntimeService runtimeService =
-      new AbstractProgramRuntimeService(CConfiguration.create(), createStore(), runnerFactory, null) {
+      new AbstractProgramRuntimeService(CConfiguration.create(), createMessagingService(), runnerFactory, null) {
       @Override
       public ProgramLiveInfo getLiveInfo(ProgramId programId) {
         return new ProgramLiveInfo(programId, "runtime") { };
@@ -143,9 +145,8 @@ public class AbstractProgramRuntimeServiceTest {
     service.startAndWait();
 
     ProgramRunnerFactory runnerFactory = createProgramRunnerFactory();
-    RuntimeStore runtimeStore = createStore();
     TestProgramRuntimeService runtimeService = new TestProgramRuntimeService(CConfiguration.create(),
-                                                                             createStore(),
+                                                                             createMessagingService(),
                                                                              runnerFactory, null, extraInfo);
     runtimeService.startAndWait();
 
@@ -162,9 +163,8 @@ public class AbstractProgramRuntimeServiceTest {
     ProgramRunnerFactory runnerFactory = createProgramRunnerFactory(argumentsMap);
 
     final Program program = createDummyProgram();
-    RuntimeStore runtimeStore = createStore();
     final ProgramRuntimeService runtimeService =
-      new AbstractProgramRuntimeService(CConfiguration.create(), createStore(), runnerFactory, null) {
+      new AbstractProgramRuntimeService(CConfiguration.create(), createMessagingService(), runnerFactory, null) {
       @Override
       public ProgramLiveInfo getLiveInfo(ProgramId programId) {
         return new ProgramLiveInfo(programId, "runtime") { };
@@ -267,48 +267,51 @@ public class AbstractProgramRuntimeServiceTest {
     };
   }
 
-  private RuntimeStore createStore() {
-    return new RuntimeStore() {
+  private MessagingService createMessagingService() {
+    return new MessagingService() {
       @Override
-      public void setInit(ProgramId id, String pid, long startTime, @Nullable String twillRunId,
-                          Map<String, String> runtimeArgs, Map<String, String> systemArgs) {
+      public void createTopic(TopicMetadata topicMetadata) throws TopicAlreadyExistsException, IOException {
 
       }
 
       @Override
-      public void setStart(ProgramId id, String pid, long startTime, @Nullable String twillRunId,
-                           Map<String, String> runtimeArgs, Map<String, String> systemArgs) {
+      public void updateTopic(TopicMetadata topicMetadata) throws TopicNotFoundException, IOException {
 
       }
 
       @Override
-      public void setStop(ProgramId id, String pid, long endTime, ProgramRunStatus runStatus) {
+      public void deleteTopic(TopicId topicId) throws TopicNotFoundException, IOException {
 
       }
 
       @Override
-      public void setStop(ProgramId id, String pid, long endTime, ProgramRunStatus runStatus,
-                          @Nullable BasicThrowable failureCause) {
+      public TopicMetadata getTopic(TopicId topicId) throws TopicNotFoundException, IOException {
+        return null;
+      }
+
+      @Override
+      public List<TopicId> listTopics(NamespaceId namespaceId) throws IOException {
+        return null;
+      }
+
+      @Override
+      public MessageFetcher prepareFetch(TopicId topicId) throws TopicNotFoundException, IOException {
+        return null;
+      }
+
+      @Nullable
+      @Override
+      public RollbackDetail publish(StoreRequest request) throws TopicNotFoundException, IOException {
+        return null;
+      }
+
+      @Override
+      public void storePayload(StoreRequest request) throws TopicNotFoundException, IOException {
 
       }
 
       @Override
-      public void setSuspend(ProgramId id, String pid) {
-
-      }
-
-      @Override
-      public void setResume(ProgramId id, String pid) {
-
-      }
-
-      @Override
-      public void updateWorkflowToken(ProgramRunId workflowRunId, WorkflowToken token) {
-
-      }
-
-      @Override
-      public void addWorkflowNodeState(ProgramRunId workflowRunId, WorkflowNodeStateDetail nodeStateDetail) {
+      public void rollback(TopicId topicId, RollbackDetail rollbackDetail) throws TopicNotFoundException, IOException {
 
       }
     };
@@ -436,11 +439,11 @@ public class AbstractProgramRuntimeServiceTest {
 
     private final RuntimeInfo extraInfo;
 
-    protected TestProgramRuntimeService(CConfiguration cConf, RuntimeStore runtimeStore,
+    protected TestProgramRuntimeService(CConfiguration cConf, MessagingService messagingService,
                                         ProgramRunnerFactory programRunnerFactory,
                                         @Nullable ArtifactRepository artifactRepository,
                                         @Nullable RuntimeInfo extraInfo) {
-      super(cConf, runtimeStore, programRunnerFactory, artifactRepository);
+      super(cConf, messagingService, programRunnerFactory, artifactRepository);
       this.extraInfo = extraInfo;
     }
 

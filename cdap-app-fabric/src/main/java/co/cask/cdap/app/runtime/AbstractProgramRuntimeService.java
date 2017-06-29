@@ -21,7 +21,6 @@ import co.cask.cdap.api.plugin.Plugin;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.program.ProgramDescriptor;
 import co.cask.cdap.app.program.Programs;
-import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.ArtifactNotFoundException;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
@@ -29,6 +28,7 @@ import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.io.Locations;
 import co.cask.cdap.common.lang.jar.BundleJarUtil;
 import co.cask.cdap.common.utils.DirUtils;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractListener;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
@@ -37,7 +37,7 @@ import co.cask.cdap.internal.app.runtime.artifact.ArtifactDetail;
 import co.cask.cdap.internal.app.runtime.artifact.ArtifactRepository;
 import co.cask.cdap.internal.app.runtime.artifact.Artifacts;
 import co.cask.cdap.internal.app.runtime.service.SimpleRuntimeInfo;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
+import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
@@ -88,17 +88,17 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
                                                                                       ProgramController.State.KILLED,
                                                                                       ProgramController.State.ERROR);
   private final CConfiguration cConf;
-  private final RuntimeStore runtimeStore;
+  private final MessagingService messagingService;
   private final ReadWriteLock runtimeInfosLock;
   private final Table<ProgramType, RunId, RuntimeInfo> runtimeInfos;
   private final ProgramRunnerFactory programRunnerFactory;
   private final ArtifactRepository artifactRepository;
 
-  protected AbstractProgramRuntimeService(CConfiguration cConf, RuntimeStore runtimeStore,
+  protected AbstractProgramRuntimeService(CConfiguration cConf, MessagingService messagingService,
                                           ProgramRunnerFactory programRunnerFactory,
                                           ArtifactRepository artifactRepository) {
     this.cConf = cConf;
-    this.runtimeStore = runtimeStore;
+    this.messagingService = messagingService;
     this.runtimeInfosLock = new ReentrantReadWriteLock();
     this.runtimeInfos = HashBasedTable.create();
     this.programRunnerFactory = programRunnerFactory;
@@ -111,7 +111,7 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
 
     ProgramRunner runner = programRunnerFactory.create(programId.getType());
     RunId runId = RunIds.generate();
-    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+    ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
       .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
     File tempDir = createTempDirectory(programId, runId);
     Runnable cleanUpTask = createCleanupTask(tempDir, runner);
