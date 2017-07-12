@@ -16,21 +16,27 @@
 
 package co.cask.cdap.internal.app.services;
 
+import co.cask.cdap.api.ProgramStatus;
 import co.cask.cdap.api.data.DatasetContext;
+import co.cask.cdap.api.dataset.DatasetManagementException;
 import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
-import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
+import co.cask.cdap.internal.app.runtime.schedule.store.Schedulers;
 import co.cask.cdap.messaging.MessagingService;
+import co.cask.cdap.messaging.client.StoreRequestBuilder;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.Notification;
 import co.cask.cdap.proto.ProgramRunStatus;
+import co.cask.cdap.proto.id.NamespaceId;
 import co.cask.cdap.proto.id.ProgramRunId;
+import co.cask.cdap.proto.id.TopicId;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -39,6 +45,7 @@ import org.apache.tephra.TransactionSystemClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -50,11 +57,15 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
   private static final Logger LOG = LoggerFactory.getLogger(ProgramStatusPersistService.class);
   private static final Gson GSON = new Gson();
   private static final Type STRING_STRING_MAP = new TypeToken<Map<String, String>>() { }.getType();
+  private final MessagingService messagingService;
+  private final CConfiguration cConf;
 
   @Inject
   ProgramStatusPersistService(MessagingService messagingService, Store store, CConfiguration cConf,
                               DatasetFramework datasetFramework, TransactionSystemClient txClient) {
     super(messagingService, store, cConf, datasetFramework, txClient);
+    this.messagingService = messagingService;
+    this.cConf = cConf;
   }
 
   @Override
@@ -106,7 +117,7 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
       String twillRunId = notification.getProperties().get(ProgramOptionConstants.TWILL_RUN_ID);
       Arguments userArguments = getArguments(properties, ProgramOptionConstants.USER_OVERRIDES);
       Arguments systemArguments = getArguments(properties, ProgramOptionConstants.SYSTEM_OVERRIDES);
-      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(store)
+      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
         .withArguments(userArguments.asMap(), systemArguments.asMap());
 
       long startTime = getTime(notification.getProperties(), ProgramOptionConstants.LOGICAL_START_TIME);
@@ -148,6 +159,21 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
           throw new IllegalArgumentException(String.format("Cannot persist ProgramRunStatus %s for Program %s",
                                                            programRunStatus, programRunId));
       }
+
+      if (programRunStatus != ProgramRunStatus.STARTING) {
+        ProgramStatus programStatus = ProgramStatus.valueOf(programRunStatus.toString().toUpperCase());
+        String triggerKeyForProgramStatus = Schedulers.triggerKeyForProgramStatus(programRunId.getParent(),
+                                                                                  programStatus);
+
+        if (canTriggerOtherPrograms(context, triggerKeyForProgramStatus)) {
+          // Now send the notification to the scheduler
+          TopicId programStatusTriggerTopic =
+            NamespaceId.SYSTEM.topic(cConf.get(Constants.Scheduler.PROGRAM_STATUS_EVENT_TOPIC));
+          messagingService.publish(StoreRequestBuilder.of(programStatusTriggerTopic)
+                  .addPayloads(GSON.toJson(notification))
+                  .build());
+        }
+      }
     }
 
     private long getTime(Map<String, String> properties, String option) {
@@ -161,5 +187,10 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
       return (arguments == null) ? new BasicArguments()
                                  : new BasicArguments(arguments);
     }
+  }
+
+  private boolean canTriggerOtherPrograms(DatasetContext context, String triggerKey)
+          throws IOException, DatasetManagementException {
+    return !Schedulers.getScheduleStore(context, datasetFramework).findSchedules(triggerKey).isEmpty();
   }
 }
