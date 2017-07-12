@@ -45,7 +45,7 @@ public interface ProgramStateWriter {
   /**
    * Updates the program run's status to be terminated at the given time with the given run status
    *
-   * @param endTime the end time of the program when it has terminated
+   * @param endTimeInSeconds the end time of the program when it has terminated
    * @param runStatus the final run status of the program
    * @param cause the reason for the program run's failure, if the program terminated with an error
    */

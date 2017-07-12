@@ -24,7 +24,6 @@ import co.cask.cdap.common.service.Retries;
 import co.cask.cdap.common.service.RetryStrategies;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
-import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
 import com.google.common.base.Supplier;
 import org.apache.twill.api.RunId;
@@ -78,7 +77,8 @@ public final class ProgramStorePublisher implements ProgramStateWriter {
   }
 
   @Override
-  public void stop(final long endTimeInSeconds, final ProgramRunStatus runStatus, final @Nullable BasicThrowable cause) {
+  public void stop(final long endTimeInSeconds, final ProgramRunStatus runStatus,
+                   final @Nullable BasicThrowable cause) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
