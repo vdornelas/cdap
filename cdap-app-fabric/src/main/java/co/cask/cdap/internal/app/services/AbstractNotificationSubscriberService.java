@@ -68,7 +68,6 @@ public abstract class AbstractNotificationSubscriberService extends AbstractIdle
   // Sampling log only log once per 10000
   private static final Logger SAMPLING_LOG = Loggers.sampling(LOG, LogSamplers.limitRate(10000));
   private static final Gson GSON = new Gson();
-  private static final Type STRING_STRING_MAP = new TypeToken<Map<String, String>>() { }.getType();
 
   protected final Transactional transactional;
   protected final Store store;
