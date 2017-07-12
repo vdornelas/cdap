@@ -28,6 +28,8 @@ import co.cask.cdap.api.mapreduce.MapReduceContext;
 import co.cask.cdap.api.mapreduce.MapReduceTaskContext;
 import co.cask.cdap.api.metrics.Metrics;
 import co.cask.cdap.etl.api.Transform;
+import co.cask.cdap.etl.api.TransformContext;
+import co.cask.cdap.etl.api.TransformPrepareContext;
 import co.cask.cdap.etl.api.batch.BatchAggregator;
 import co.cask.cdap.etl.api.batch.BatchConfigurable;
 import co.cask.cdap.etl.api.batch.BatchJoiner;
@@ -187,10 +189,10 @@ public class ETLMapReduce extends AbstractMapReduce {
     PipelinePluginInstantiator pluginInstantiator = new PipelinePluginInstantiator(context, mrMetrics, phaseSpec);
 
     Map<String, String> inputAliasToStage = new HashMap<>();
-    for (String sourceName : phaseSpec.getPhase().getSources()) {
+    for (String sourceName : phase.getSources()) {
       try {
         BatchConfigurable<BatchSourceContext> batchSource = pluginInstantiator.newPluginInstance(sourceName, evaluator);
-        StageInfo stageInfo = phaseSpec.getPhase().getStage(sourceName);
+        StageInfo stageInfo = phase.getStage(sourceName);
         MapReduceBatchContext sourceContext = new MapReduceBatchContext(context, mrMetrics, stageInfo);
         batchSource.prepareRun(sourceContext);
         runtimeArgs.put(sourceName, sourceContext.getRuntimeArguments());
@@ -207,6 +209,13 @@ public class ETLMapReduce extends AbstractMapReduce {
       }
     }
     hConf.set(INPUT_ALIAS_KEY, GSON.toJson(inputAliasToStage));
+
+    for (StageInfo transformInfo : phase.getStagesOfType(Transform.PLUGIN_TYPE)) {
+      Transform transform = pluginInstantiator.newPluginInstance(transformInfo.getName(), evaluator);
+      TransformPrepareContext transformContext = new MapReduceBatchContext(context, mrMetrics, transformInfo);
+      transform.prepareRun(transformContext);
+      finishers.add(transform, transformContext);
+    }
 
     Map<String, SinkOutput> sinkOutputs = new HashMap<>();
     for (StageInfo stageInfo : Sets.union(phase.getStagesOfType(Constants.CONNECTOR_TYPE),
