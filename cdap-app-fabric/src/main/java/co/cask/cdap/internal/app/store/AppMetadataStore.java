@@ -460,7 +460,7 @@ public class AppMetadataStore extends MetadataStoreDataset {
       resultmap.putAll(getSuspendedRuns(programId, startTime, endTime, limit - resultmap.size(), filter));
       resultmap.putAll(getHistoricalRuns(programId, status, startTime, endTime, limit - resultmap.size(), filter));
       return resultmap;
-    } else if (status.equals(ProgramRunStatus.RUNNING)) {
+    } else if (status.equals(ProgramRunStatus.STARTING) || status.equals(ProgramRunStatus.RUNNING)) {
       return getActiveRuns(programId, startTime, endTime, limit, filter);
     } else if (status.equals(ProgramRunStatus.SUSPENDED)) {
       return getSuspendedRuns(programId, startTime, endTime, limit, filter);
