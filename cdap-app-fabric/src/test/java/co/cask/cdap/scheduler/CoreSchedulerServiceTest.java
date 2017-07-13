@@ -17,6 +17,7 @@
 package co.cask.cdap.scheduler;
 
 import co.cask.cdap.AppWithFrequentScheduledWorkflows;
+import co.cask.cdap.AppWithMultipleWorkflows;
 import co.cask.cdap.api.ProgramStatus;
 import co.cask.cdap.api.Transactional;
 import co.cask.cdap.api.Transactionals;
@@ -25,11 +26,12 @@ import co.cask.cdap.api.common.Bytes;
 import co.cask.cdap.api.data.DatasetContext;
 import co.cask.cdap.api.dataset.lib.CloseableIterator;
 import co.cask.cdap.api.dataset.lib.PartitionKey;
+import co.cask.cdap.api.workflow.Value;
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.AlreadyExistsException;
 import co.cask.cdap.common.ConflictException;
 import co.cask.cdap.common.NotFoundException;
-import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.utils.Tasks;
@@ -38,8 +40,6 @@ import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.dataset2.DynamicDatasetCache;
 import co.cask.cdap.data2.dataset2.MultiThreadDatasetCache;
 import co.cask.cdap.data2.transaction.Transactions;
-import co.cask.cdap.internal.app.program.ProgramEventPublisher;
-import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramSchedule;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramScheduleStatus;
@@ -55,7 +55,6 @@ import co.cask.cdap.internal.schedule.constraint.Constraint;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.messaging.client.StoreRequestBuilder;
 import co.cask.cdap.messaging.data.MessageId;
-import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.Notification;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
@@ -78,7 +77,6 @@ import com.google.common.util.concurrent.Service;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.apache.tephra.RetryStrategies;
-import org.apache.twill.api.RunId;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -93,7 +91,6 @@ import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -126,7 +123,6 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     APP_ID.program(ProgramType.WORKFLOW, AppWithFrequentScheduledWorkflows.SCHEDULED_WORKFLOW_2);
   private static final ProgramId SCHEDULED_WORKFLOW_3 =
     APP_ID.program(ProgramType.WORKFLOW, AppWithFrequentScheduledWorkflows.SCHEDULED_WORKFLOW_3);
-  private static final RunId dummyRunId = RunIds.fromString(UUID.randomUUID().toString());
 
   @ClassRule
   public static final TemporaryFolder TEMP_FOLDER = new TemporaryFolder();
@@ -353,11 +349,14 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
   public void testProgramEvents() throws Exception {
     // Deploy the app
     deploy(AppWithFrequentScheduledWorkflows.class);
+    TopicId programEventTopic = NamespaceId.SYSTEM.topic(cConf.get(Constants.Scheduler.PROGRAM_STATUS_EVENT_TOPIC));
     // The program status trigger schedule is disabled, but the other schedules are enabled
     // There should be no runs until the program status trigger schedule is enabled
 
     ScheduleId scheduleId = APP_ID.schedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
     ProgramSchedule schedule = scheduler.getSchedule(scheduleId);
+
+    // TODO add ProgramEventPublisher switch cConfiguration to switch to ProgramEventSubscriberThread
 
     // Update the schedule so that the scheduled workflow is triggered regardless of failure or success.
     ProgramSchedule updatedSchedule = new ProgramSchedule(schedule.getName(), schedule.getDescription(),
@@ -371,18 +370,19 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     scheduler.updateSchedule(updatedSchedule);
 
     // This schedule depends on the TEN_SECOND_SCHEDULE, this must be enabled too
+    long now = System.currentTimeMillis();
     enableSchedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
-    // Wait for 2 runs since the ProgramRunStatus.STARTING and ProgramRunStatus.RUNNING has to be there
-    waitForCompleteRuns(2, SCHEDULED_WORKFLOW_3);
+    waitUntilProcessed(programEventTopic, now);
+    waitForCompleteRuns(1, SCHEDULED_WORKFLOW_3);
 
-//    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
-//    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
-//    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
-//
+    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
+    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
+    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
+
     disableSchedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
-//
-//    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
-//                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
+
+    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
+                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
   }
 
   private void testScheduleUpdate(String howToUpdate) throws Exception {
