@@ -23,6 +23,7 @@ import {preventPropagation} from 'services/helpers';
 import {execute} from 'components/DataPrep/store/DataPrepActionCreator';
 import DataPrepStore from 'components/DataPrep/store';
 import DataPrepActions from 'components/DataPrep/store/DataPrepActions';
+import IconSVG from 'components/IconSVG';
 
 require('./MarkAsError.scss');
 
@@ -40,9 +41,8 @@ const conditionsOptions = [
 export default class MarkAsError extends Component {
   state = {
     selectedCondition: conditionsOptions[0],
-    customCondition: null,
-    textFilter: '',
-    customFilter: '',
+    conditionValue: '',
+    customCondition: '',
     ignoreCase: false
   };
 
@@ -55,10 +55,10 @@ export default class MarkAsError extends Component {
     if (this.props.isOpen && this.calculateOffset) {
       this.calculateOffset();
     }
-    if (this.state.selectedCondition.substr(0, 4) === 'TEXT' && this.state.textFilter.length === 0 && this.textFilterRef) {
-      this.textFilterRef.focus();
-    } else if (this.state.selectedCondition.substr(0, 6) === 'CUSTOM' && this.state.customFilter.length === 0 && this.customFilterRef) {
-      this.customFilterRef.focus();
+    if (this.state.selectedCondition.substr(0, 4) === 'TEXT' && this.state.conditionValue.length === 0 && this.conditionValueRef) {
+      this.conditionValueRef.focus();
+    } else if (this.state.selectedCondition.substr(0, 6) === 'CUSTOM' && this.state.customCondition.length === 0 && this.customConditionRef) {
+      this.customConditionRef.focus();
     }
   }
 
@@ -83,8 +83,8 @@ export default class MarkAsError extends Component {
       });
   };
 
-  handleTextFilterChange = (e) => {
-    this.setState({textFilter: e.target.value});
+  handleConditionValueChange = (e) => {
+    this.setState({conditionValue: e.target.value});
   };
 
   handleCustomFilterChange = (e) => {
@@ -101,8 +101,7 @@ export default class MarkAsError extends Component {
     let directive;
     let condition = 'send-to-error';
     let column = this.props.column;
-    let textValue = this.state.textFilter;
-    let configuration;
+    let textValue = this.state.conditionValue;
 
     switch (this.state.selectedCondition) {
       case 'EMPTY':
@@ -115,20 +114,16 @@ export default class MarkAsError extends Component {
         directive = `${condition} "${column}" =~ "${textValue}.*"`;
         break;
       case 'TEXTSTARTSWITH':
-        configuration = `"${textValue}"`;
         if (this.state.ignoreCase) {
-          column = `${column}.toLowerCase()`;
-          configuration = `"${textValue}".toLowerCase()`;
+          textValue = `(?i)${textValue}`;
         }
-        directive = `${condition} "${column}" =^ "${configuration}"`;
+        directive = `${condition} "${column}" =^ "${textValue}"`;
         break;
       case 'TEXTENDSWITH':
-        configuration = `"${textValue}"`;
         if (this.state.ignoreCase) {
-          column = `${column}.toLowerCase()`;
-          configuration = `"${textValue}".toLowerCase()`;
+          textValue = `(?i)${textValue}`;
         }
-        directive = `${condition} "${column}" =$ "${configuration}"`;
+        directive = `${condition} "${column}" =$ "${textValue}"`;
         break;
       case 'TEXTEXACTLY':
         if (this.state.ignoreCase) {
@@ -140,13 +135,13 @@ export default class MarkAsError extends Component {
         directive = `${condition} "${column}" "${textValue}"`;
         break;
       case 'CUSTOMCONDITION':
-        directive = `${condition} "${column}" "${this.state.customFilter}"`;
+        directive = `${condition} "${column}" "${this.state.customCondition}"`;
         break;
     }
     return directive;
   }
 
-  renderTextFilter = () => {
+  renderTextCondition = () => {
     if (this.state.selectedCondition.substr(0, 4) !== 'TEXT') { return null; }
 
     let ignoreCase;
@@ -157,11 +152,9 @@ export default class MarkAsError extends Component {
             className="cursor-pointer"
             onClick={this.toggleIgnoreCase}
           >
-            <span
-              className={classnames('fa', {
-                'fa-square-o': !this.state.ignoreCase,
-                'fa-check-square': this.state.ignoreCase
-              })}
+            <IconSVG
+              className="fa"
+              name={this.state.ignoreCase ? "icon-check-square-o" : "icon-square-o"}
             />
             <span>
               {T.translate(`${PREFIX}.ignoreCase`)}
@@ -178,10 +171,10 @@ export default class MarkAsError extends Component {
           <input
             type="text"
             className="form-control mousetrap"
-            value={this.state.textFilter}
-            onChange={this.handleTextFilterChange}
+            value={this.state.conditionValue}
+            onChange={this.handleConditionValueChange}
             placeholder={T.translate(`${PREFIX}.Placeholders.${this.state.selectedCondition}`)}
-            ref={ref => this.textFilterRef = ref}
+            ref={ref => this.conditionValueRef = ref}
           />
         </div>
         {ignoreCase}
@@ -197,9 +190,9 @@ export default class MarkAsError extends Component {
         <br />
         <textarea
           className="form-control"
-          value={this.state.customFilter}
+          value={this.state.customCondition}
           onChange={this.handleCustomFilterChange}
-          ref={ref => this.customFilterRef = ref}
+          ref={ref => this.customConditionRef = ref}
           placeholder={T.translate(`${PREFIX}.Placeholders.CUSTOMCONDITION`)}
         />
       </div>
@@ -256,7 +249,7 @@ export default class MarkAsError extends Component {
             </div>
           </div>
         </div>
-        {this.renderTextFilter()}
+        {this.renderTextCondition()}
         {this.renderCustomFilter()}
       </div>
     );
@@ -264,11 +257,11 @@ export default class MarkAsError extends Component {
 
   isApplyDisabled = () => {
     if (this.state.selectedCondition.substr(0, 4) === 'TEXT') {
-      return this.state.textFilter.length === 0;
+      return this.state.conditionValue.length === 0;
     }
 
     if (this.state.selectedCondition.substr(0, 4) === 'CUSTOM') {
-      return this.state.customFilter.length === 0;
+      return this.state.customCondition.length === 0;
     }
   };
 
@@ -315,7 +308,10 @@ export default class MarkAsError extends Component {
         <span>{T.translate(`${PREFIX}.title`)}</span>
 
         <span className="float-xs-right">
-          <span className="fa fa-caret-right" />
+          <IconSVG
+            name="icon-caret-right"
+            className="fa"
+          />
         </span>
 
         {this.renderDetail()}
