@@ -140,7 +140,7 @@ export default class FindAndReplaceDirective extends Component {
 
     return (
       <div
-        className="fill-null-or-empty-detail second-level-popover"
+        className="second-level-popover"
         onClick={this.preventPropagation}
       >
         <h5>{T.translate(`${PREFIX}.find`)}</h5>
@@ -233,7 +233,7 @@ export default class FindAndReplaceDirective extends Component {
     return (
       <div
         id="find-and-replace-directive"
-        className={classnames('fill-null-or-empty-directive clearfix action-item', {
+        className={classnames('clearfix action-item', {
           'active': this.state.isOpen
         })}
       >
