@@ -806,7 +806,11 @@ public class ProgramLifecycleService extends AbstractIdleService {
     LOG.trace("Start getting run records not actually running ...");
     Collection<RunRecordMeta> notActuallyRunning = store.getRuns(ProgramRunStatus.RUNNING, notRunningPredicate)
                                                         .values();
-    notActuallyRunning.addAll(store.getRuns(ProgramRunStatus.STARTING, notRunningPredicate).values());
+    Collection<RunRecordMeta> notActuallyStarting = store.getRuns(ProgramRunStatus.STARTING, notRunningPredicate)
+                                                         .values();
+    if (notActuallyStarting != null) {
+      notActuallyRunning.addAll(notActuallyStarting);
+    }
     LOG.trace("End getting {} run records not actually running.", notActuallyRunning.size());
 
     final Map<String, ProgramId> runIdToProgramId = new HashMap<>();
