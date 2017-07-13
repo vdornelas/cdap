@@ -38,6 +38,8 @@ import co.cask.cdap.internal.app.runtime.artifact.ArtifactRepository;
 import co.cask.cdap.internal.app.runtime.artifact.Artifacts;
 import co.cask.cdap.internal.app.runtime.service.SimpleRuntimeInfo;
 import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.proto.BasicThrowable;
+import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ArtifactId;
 import co.cask.cdap.proto.id.ProgramId;
@@ -69,6 +71,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -109,6 +112,7 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
 
     ProgramRunner runner = programRunnerFactory.create(programId.getType());
     final RunId runId = RunIds.generate();
+    ProgramStateWriter programStateWriter = null;
     File tempDir = createTempDirectory(programId, runId);
     Runnable cleanUpTask = createCleanupTask(tempDir, runner);
     try {
@@ -129,14 +133,18 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       final Arguments userArguments = options.getUserArguments();
       final Arguments systemArguments = options.getArguments();
       final String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
-      new ProgramStorePublisher(programId, runId, twillRunId, userArguments, systemArguments,
-                                runtimeStore).start(System.currentTimeMillis());
+      programStateWriter = new ProgramStorePublisher(programId, runId, twillRunId, userArguments,
+                                                     systemArguments, runtimeStore);
+      programStateWriter.start(System.currentTimeMillis());
 
       ProgramController controller = runner.run(executableProgram, optionsWithPlugins);
       RuntimeInfo runtimeInfo = createRuntimeInfo(controller, programId);
       monitorProgram(runtimeInfo, cleanUpTask);
       return runtimeInfo;
     } catch (Exception e) {
+      // Set the program state to an error when an exception is thrown
+      Runnable setStateToError = createProgramStatusTask(programStateWriter, e);
+      cleanUpTask = createCleanupTask(cleanUpTask, setStateToError);
       cleanUpTask.run();
       LOG.error("Exception while trying to run program", e);
       throw Throwables.propagate(e);
@@ -170,6 +178,16 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       throw Throwables.propagate(e);
     }
     return Programs.create(cConf, programRunner, programDescriptor, programJarLocation, unpackedDir);
+  }
+
+  private Runnable createProgramStatusTask(final ProgramStateWriter writer, final Exception e) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+        writer.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(e.getCause()));
+      }
+    };
   }
 
   private Runnable createCleanupTask(final Object... resources) {

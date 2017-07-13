@@ -30,6 +30,7 @@ import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.RunRecord;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import org.apache.http.HttpResponse;
 import org.junit.Assert;
@@ -37,6 +38,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -47,6 +49,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class ProgramLifecycleServiceTest extends AppFabricTestBase {
 
+  private static final Map<String, String> EMPTY_STRING_MAP = ImmutableMap.of();
   private static ProgramLifecycleService programLifecycleService;
   private static Store store;
   private static ProgramRuntimeService runtimeService;
@@ -60,30 +63,82 @@ public class ProgramLifecycleServiceTest extends AppFabricTestBase {
 
   @Test
   public void testInvalidFlowRunRecord() throws Exception {
-    // Create App with Flow and the deploy
-    HttpResponse response = deploy(WordCountApp.class, Constants.Gateway.API_VERSION_3_TOKEN, TEST_NAMESPACE1);
-    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
-
     final Id.Program wordcountFlow1 =
       Id.Program.from(TEST_NAMESPACE1, "WordCountApp", ProgramType.FLOW, "WordCountFlow");
+    String pid = deployProgramAndInvalidate(wordcountFlow1);
+    int failureRuns = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED).size();
+
+    // Use the store manipulate state to be RUNNING
+    long now = System.currentTimeMillis();
+    long nowSecs = TimeUnit.MILLISECONDS.toSeconds(now);
+    store.setStart(wordcountFlow1.toEntityId(), pid, nowSecs);
+
+    // Now check again via Store to assume data store is wrong.
+    RunRecord runRecordMeta = store.getRun(wordcountFlow1.toEntityId(), pid);
+    Assert.assertNotNull(runRecordMeta);
+    Assert.assertEquals(ProgramRunStatus.RUNNING, runRecordMeta.getStatus());
+
+    // Verify there is NO FAILED run record for the application
+    List<RunRecord> runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED);
+    Assert.assertEquals(failureRuns, runRecords.size());
+
+    // Lets fix it
+    Set<String> processedInvalidRunRecordIds = Sets.newHashSet();
+    programLifecycleService.validateAndCorrectRunningRunRecords(ProgramType.FLOW, processedInvalidRunRecordIds);
+
+    // Verify there is one FAILED run record for the application
+    runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED);
+    Assert.assertEquals(failureRuns + 1, runRecords.size());
+    Assert.assertEquals(ProgramRunStatus.FAILED, runRecords.get(0).getStatus());
+  }
+
+  @Test
+  public void testInvalidStartFlowTimeout() throws Exception {
+    // Create App with Flow and the deploy
+    final Id.Program wordcountFlow1 =
+      Id.Program.from(TEST_NAMESPACE1, "WordCountApp", ProgramType.FLOW, "WordCountFlow");
+    String pid = deployProgramAndInvalidate(wordcountFlow1);
+    int failureRuns = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED).size();
+
+    // Use the store to manipulate starting state to be five minutes ago
+    long nowSecs = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis())
+                    - Constants.Retry.RUN_RECORD_START_PROGRAM_TIME_ALLOWANCE_SECONDS
+                    - TimeUnit.MINUTES.toSeconds(5);
+
+    store.setInit(wordcountFlow1.toEntityId(), pid, nowSecs, null, EMPTY_STRING_MAP, EMPTY_STRING_MAP);
+
+    // Now check again via Store to assume data store is wrong.
+    RunRecord runRecordMeta = store.getRun(wordcountFlow1.toEntityId(), pid);
+    Assert.assertNotNull(runRecordMeta);
+    Assert.assertEquals(ProgramRunStatus.STARTING, runRecordMeta.getStatus());
+
+    // Verify there is NO FAILED run record for the application
+    List<RunRecord> runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED);
+    Assert.assertEquals(failureRuns, runRecords.size());
+
+    // Lets fix it
+    Set<String> processedInvalidRunRecordIds = Sets.newHashSet();
+    programLifecycleService.validateAndCorrectRunningRunRecords(ProgramType.FLOW, processedInvalidRunRecordIds);
+
+    // Verify there is one FAILED run record for the application
+    runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED);
+    Assert.assertEquals(failureRuns + 1, runRecords.size());
+    Assert.assertEquals(ProgramRunStatus.FAILED, runRecords.get(0).getStatus());
+  }
+
+  private String deployProgramAndInvalidate(final Id.Program wordcountFlow1) throws Exception {
+    HttpResponse response = deploy(WordCountApp.class, Constants.Gateway.API_VERSION_3_TOKEN, TEST_NAMESPACE1);
+    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
     // flow is stopped initially
     Assert.assertEquals("STOPPED", getProgramStatus(wordcountFlow1));
 
     // start a flow and check the status
     startProgram(wordcountFlow1);
-    waitState(wordcountFlow1, ProgramRunStatus.RUNNING.toString());
-
-    // Wait until we have a run record
-    Tasks.waitFor(1, new Callable<Integer>() {
-      @Override
-      public Integer call() throws Exception {
-        return getProgramRuns(wordcountFlow1, ProgramRunStatus.RUNNING.toString()).size();
-      }
-    }, 5, TimeUnit.SECONDS);
+    verifyProgramRuns(wordcountFlow1, ProgramRunStatus.RUNNING);
 
     // Get the RunRecord
-    List<RunRecord> runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.RUNNING.toString());
+    List<RunRecord> runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.RUNNING);
     Assert.assertEquals(1, runRecords.size());
     final RunRecord rr = runRecords.get(0);
 
@@ -104,27 +159,6 @@ public class ProgramLifecycleServiceTest extends AppFabricTestBase {
       }
     }, 5, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
 
-    // Use the store manipulate state to be RUNNING
-    long now = System.currentTimeMillis();
-    long nowSecs = TimeUnit.MILLISECONDS.toSeconds(now);
-    store.setStart(wordcountFlow1.toEntityId(), rr.getPid(), nowSecs);
-
-    // Now check again via Store to assume data store is wrong.
-    RunRecord runRecordMeta = store.getRun(wordcountFlow1.toEntityId(), rr.getPid());
-    Assert.assertNotNull(runRecordMeta);
-    Assert.assertEquals(ProgramRunStatus.RUNNING, runRecordMeta.getStatus());
-
-    // Verify there is NO FAILED run record for the application
-    runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED.toString());
-    Assert.assertEquals(0, runRecords.size());
-
-    // Lets fix it
-    Set<String> processedInvalidRunRecordIds = Sets.newHashSet();
-    programLifecycleService.validateAndCorrectRunningRunRecords(ProgramType.FLOW, processedInvalidRunRecordIds);
-
-    // Verify there is one FAILED run record for the application
-    runRecords = getProgramRuns(wordcountFlow1, ProgramRunStatus.FAILED.toString());
-    Assert.assertEquals(1, runRecords.size());
-    Assert.assertEquals(ProgramRunStatus.FAILED, runRecords.get(0).getStatus());
+    return rr.getPid();
   }
 }

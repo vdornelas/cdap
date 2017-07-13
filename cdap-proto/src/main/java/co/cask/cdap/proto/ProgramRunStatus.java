@@ -37,6 +37,8 @@ public enum ProgramRunStatus {
    */
   public static NodeStatus toNodeStatus(ProgramRunStatus status) {
     switch(status) {
+      case STARTING:
+        return NodeStatus.STARTING;
       case RUNNING:
         return NodeStatus.RUNNING;
       case COMPLETED:

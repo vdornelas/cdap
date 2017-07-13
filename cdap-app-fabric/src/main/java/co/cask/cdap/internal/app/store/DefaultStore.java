@@ -438,6 +438,18 @@ public class DefaultStore implements Store {
   }
 
   @Override
+  public Map<ProgramRunId, RunRecordMeta> getActiveRuns(final @Nullable ProgramId programId, final long startTime,
+                                                        final long endTime, final int limit,
+                                                        final @Nullable Predicate<RunRecordMeta> filter) {
+    return Transactions.executeUnchecked(transactional, new TxCallable<Map<ProgramRunId, RunRecordMeta>>() {
+      @Override
+      public Map<ProgramRunId, RunRecordMeta> call(DatasetContext context) throws Exception {
+        return getAppMetadataStore(context).getActiveRuns(programId, startTime, endTime, limit, filter);
+      }
+    });
+  }
+
+  @Override
   public Map<ProgramRunId, RunRecordMeta> getRuns(final Set<ProgramRunId> programRunIds) {
     return Transactions.executeUnchecked(transactional, new TxCallable<Map<ProgramRunId, RunRecordMeta>>() {
       @Override

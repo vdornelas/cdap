@@ -72,6 +72,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 import static co.cask.cdap.proto.Containers.ContainerInfo;
@@ -225,8 +226,8 @@ public final class DistributedProgramRuntimeService extends AbstractProgramRunti
     }
 
     final Set<RunId> twillRunIds = twillProgramInfo.columnKeySet();
-    Collection<RunRecordMeta> activeRunRecords = store.getRuns(ProgramRunStatus.RUNNING,
-                                                               new Predicate<RunRecordMeta>() {
+    Collection<RunRecordMeta> activeRunRecords = store.getActiveRuns(null, 0L, Long.MAX_VALUE, Integer.MAX_VALUE,
+                                                                     new Predicate<RunRecordMeta>() {
       @Override
       public boolean apply(RunRecordMeta record) {
         return record.getTwillRunId() != null

@@ -1315,6 +1315,12 @@ public final class Constants {
     public static final String FLOW_PREFIX = "flow.";
     public static final int RUN_RECORD_UPDATE_RETRY_DELAY_SECS = 5;
     public static final int LOCAL_DATASET_OPERATION_RETRY_DELAY_SECONDS = 5;
+
+    /**
+     * Maximum time in seconds we allow a program to be in the starting state before the run record
+     * corrector updates the state accordingly.
+     */
+    public static final int RUN_RECORD_START_PROGRAM_TIME_ALLOWANCE_SECONDS = 30;
   }
 
   /**
