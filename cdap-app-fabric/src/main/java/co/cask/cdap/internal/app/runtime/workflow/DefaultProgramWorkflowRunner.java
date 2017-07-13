@@ -23,11 +23,15 @@ import co.cask.cdap.api.workflow.WorkflowSpecification;
 import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.program.Programs;
+import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramRunner;
 import co.cask.cdap.app.runtime.ProgramRunnerFactory;
+import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.runtime.WorkflowTokenProvider;
+import co.cask.cdap.app.store.RuntimeStore;
+import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.internal.app.runtime.AbstractListener;
@@ -35,6 +39,9 @@ import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.SimpleProgramOptions;
+import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.proto.BasicThrowable;
+import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
 import com.google.common.base.Throwables;
@@ -42,6 +49,7 @@ import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.gson.Gson;
+import org.apache.twill.api.RunId;
 import org.apache.twill.common.Threads;
 
 import java.io.Closeable;
@@ -50,6 +58,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
@@ -69,11 +78,12 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
   private final ProgramRunnerFactory programRunnerFactory;
   private final WorkflowToken token;
   private final ProgramType programType;
+  private final RuntimeStore store;
 
   DefaultProgramWorkflowRunner(CConfiguration cConf, Program workflowProgram, ProgramOptions workflowProgramOptions,
                                ProgramRunnerFactory programRunnerFactory, WorkflowSpecification workflowSpec,
                                WorkflowToken token, String nodeId, Map<String, WorkflowNodeState> nodeStates,
-                               ProgramType programType) {
+                               ProgramType programType, RuntimeStore store) {
     this.cConf = cConf;
     this.workflowProgram = workflowProgram;
     this.workflowProgramOptions = workflowProgramOptions;
@@ -83,6 +93,7 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     this.nodeId = nodeId;
     this.nodeStates = nodeStates;
     this.programType = programType;
+    this.store = store;
   }
 
   @Override
@@ -140,12 +151,24 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
 
   private void runAndWait(ProgramRunner programRunner, Program program, ProgramOptions options) throws Exception {
     Closeable closeable = createCloseable(programRunner, program);
+
+    // Publish the program's starting state
+    RunId runId = ProgramRunners.getRunId(options);
+    final Arguments userArguments = options.getUserArguments();
+    final Arguments systemArguments = options.getArguments();
+    final String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
+    ProgramStateWriter programStateWriter = new ProgramStorePublisher(program.getId(), runId, twillRunId,
+                                                                      userArguments, systemArguments, store);
+    programStateWriter.start(System.currentTimeMillis());
+
     ProgramController controller;
     try {
       controller = programRunner.run(program, options);
     } catch (Throwable t) {
       // If there is any exception when running the program, close the program to release resources.
       // Otherwise it will be released when the execution completed.
+      long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(t));
       Closeables.closeQuietly(closeable);
       throw t;
     }

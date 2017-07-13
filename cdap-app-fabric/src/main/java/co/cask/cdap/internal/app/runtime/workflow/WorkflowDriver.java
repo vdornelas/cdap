@@ -168,7 +168,7 @@ final class WorkflowDriver extends AbstractExecutionThreadService {
     this.txClient = txClient;
     this.runtimeStore = runtimeStore;
     this.workflowProgramRunnerFactory = new ProgramWorkflowRunnerFactory(cConf, workflowSpec, programRunnerFactory,
-                                                                         program, options);
+                                                                         program, options, runtimeStore);
 
     this.basicWorkflowToken = new BasicWorkflowToken(cConf.getInt(Constants.AppFabric.WORKFLOW_TOKEN_MAX_SIZE_MB));
     this.basicWorkflowContext = new BasicWorkflowContext(workflowSpec, null,

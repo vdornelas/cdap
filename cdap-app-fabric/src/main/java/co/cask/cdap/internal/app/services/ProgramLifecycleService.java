@@ -793,24 +793,18 @@ public class ProgramLifecycleService extends AbstractIdleService {
   void validateAndCorrectRunningRunRecords(final ProgramType programType,
                                            final Set<String> processedInvalidRunRecordIds) {
     final Map<RunId, RuntimeInfo> runIdToRuntimeInfo = runtimeService.list(programType);
-    com.google.common.base.Predicate<RunRecordMeta> notRunningPredicate =
-      new com.google.common.base.Predicate<RunRecordMeta>() {
-        @Override
-        public boolean apply(RunRecordMeta input) {
-          String runId = input.getPid();
-          // Check if it is not actually running.
-          return !runIdToRuntimeInfo.containsKey(RunIds.fromString(runId));
-        }
-      };
 
+    // Includes programs with ProgramRunStatus.STARTING or ProgramRunStatus.RUNNING
     LOG.trace("Start getting run records not actually running ...");
-    Collection<RunRecordMeta> notActuallyRunning = store.getRuns(ProgramRunStatus.RUNNING, notRunningPredicate)
-                                                        .values();
-    Collection<RunRecordMeta> notActuallyStarting = store.getRuns(ProgramRunStatus.STARTING, notRunningPredicate)
-                                                         .values();
-    if (notActuallyStarting != null) {
-      notActuallyRunning.addAll(notActuallyStarting);
-    }
+    Collection<RunRecordMeta> notActuallyRunning = store.getActiveRuns(null, 0L, Long.MAX_VALUE, Integer.MAX_VALUE,
+                                                                 new com.google.common.base.Predicate<RunRecordMeta>() {
+      @Override
+      public boolean apply(RunRecordMeta input) {
+        String runId = input.getPid();
+        // Check if it is not actually running.
+        return !runIdToRuntimeInfo.containsKey(RunIds.fromString(runId));
+      }
+    }).values();
     LOG.trace("End getting {} run records not actually running.", notActuallyRunning.size());
 
     final Map<String, ProgramId> runIdToProgramId = new HashMap<>();
@@ -823,7 +817,6 @@ public class ProgramLifecycleService extends AbstractIdleService {
           String runId = input.getPid();
           // check for program Id for the run record, if null then it is invalid program type.
           ProgramId targetProgramId = retrieveProgramIdForRunRecord(programType, runId);
-
           // Check if run id is for the right program type
           if (targetProgramId != null) {
             runIdToProgramId.put(runId, targetProgramId);
@@ -849,16 +842,33 @@ public class ProgramLifecycleService extends AbstractIdleService {
       }
     });
 
+    // don't correct run records for program that are still starting, give it some time since the startTs.
+    invalidRunRecords = Collections2.filter(invalidRunRecords, new com.google.common.base.Predicate<RunRecordMeta>() {
+        @Override
+        public boolean apply(RunRecordMeta invalidRunRecordMeta) {
+          if (invalidRunRecordMeta.getStatus() != ProgramRunStatus.STARTING) {
+            return true;
+          }
+
+          long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+          if (invalidRunRecordMeta.getStartTs() + Constants.Retry.RUN_RECORD_START_PROGRAM_TIME_ALLOWANCE_SECONDS >
+              nowSec) {
+            LOG.trace("Will not correct invalid run record {} since it started {} seconds ago",
+                    invalidRunRecordMeta, nowSec - invalidRunRecordMeta.getStartTs());
+            return false;
+          }
+          return true;
+        }
+    });
+
     LOG.trace("End getting invalid run records.");
 
     if (!invalidRunRecords.isEmpty()) {
-      LOG.warn("Found {} RunRecords with STARTING or RUNNING status and the program not actually running for " +
-               "program type {}",
-               invalidRunRecords.size(), programType.getPrettyName());
+      LOG.warn("Found {} active RunRecords and the program not actually running for " +
+               "program type {}", invalidRunRecords.size(), programType.getPrettyName());
     } else {
-      LOG.trace("No RunRecords found with STARTING or RUNNING status and the program not actually running for " +
-                "program type {}",
-                programType.getPrettyName());
+      LOG.trace("No active RunRecords and the program not actually running for " +
+                "program type {}", programType.getPrettyName());
     }
 
     // Now lets correct the invalid RunRecords
@@ -866,12 +876,12 @@ public class ProgramLifecycleService extends AbstractIdleService {
       String runId = invalidRunRecordMeta.getPid();
       ProgramId targetProgramId = runIdToProgramId.get(runId);
 
+      // RunRecord could have a STARTING OR RUNNING state, update either to ERROR status
       boolean updated = store.compareAndSetStatus(targetProgramId, runId, invalidRunRecordMeta.getStatus(),
                                                   ProgramController.State.ERROR.getRunStatus());
       if (updated) {
-        LOG.warn("Fixed RunRecord {} for program {} with STARTING or RUNNING status because the program was not " +
-                 "actually running",
-                 runId, targetProgramId);
+        LOG.warn("Fixed RunRecord {} for program {} with " + invalidRunRecordMeta.getStatus() + " because the " +
+                 "program was not actually running", runId, targetProgramId);
 
         processedInvalidRunRecordIds.add(runId);
       }

@@ -376,9 +376,9 @@ public class LineageTestRun extends MetadataTestBase {
 
   private RunId getRunId(final ProgramId program, @Nullable final RunId exclude) throws Exception {
     final AtomicReference<Iterable<RunRecord>> runRecords = new AtomicReference<>();
-    Tasks.waitFor(true, new Callable<Boolean>() {
+    Tasks.waitFor(1, new Callable<Integer>() {
       @Override
-      public Boolean call() throws Exception {
+      public Integer call() throws Exception {
         runRecords.set(Iterables.filter(
           programClient.getProgramRuns(program, ProgramRunStatus.RUNNING.toString(),
                                        0, Long.MAX_VALUE, Integer.MAX_VALUE),
@@ -388,11 +388,11 @@ public class LineageTestRun extends MetadataTestBase {
               return exclude == null || !input.getPid().equals(exclude.getId());
             }
           }));
-        return Iterables.size(runRecords.get()) > 0;
+        return Iterables.size(runRecords.get());
       }
     }, 60, TimeUnit.SECONDS, 10, TimeUnit.MILLISECONDS);
-    // Return last since there may be a record with ProgramRunStatus.STARTING first
-    return RunIds.fromString(Iterables.getLast(runRecords.get(), null).getPid());
+    Assert.assertEquals(1, Iterables.size(runRecords.get()));
+    return RunIds.fromString(Iterables.getFirst(runRecords.get(), null).getPid());
   }
 
   @SafeVarargs
