@@ -21,6 +21,8 @@ Plugin Reference
     Shared Plugins <shared-plugins/index>
     Post-run Plugins <post-run-plugins/index>
 
+    :hidden:
+    Plugins <plugins>
 
 These plugins (from CDAP Pipelines Version |cdap-pipelines-version|) are shipped with CDAP, both in the
 CDAP Sandbox and Distributed CDAP:
