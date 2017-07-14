@@ -583,7 +583,7 @@ features:
         ignoreCase: Ignore Case
         if: If
         Placeholders:
-          CUSTOMCONDITION: "E.g. < 30 || gender == \"Male\""
+          CUSTOMCONDITION: "E.g. {column} < 30 || gender == \"Male\""
           TEXTCONTAINS: Enter contained value
           TEXTENDSWITH: Enter suffix
           TEXTEXACTLY: Enter value

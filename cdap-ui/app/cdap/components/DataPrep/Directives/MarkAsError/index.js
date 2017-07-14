@@ -171,7 +171,7 @@ export default class MarkAsError extends Component {
         finalExpression = `${directive} ${column} =~ "${textValue}"`;
         break;
       case 'CUSTOMCONDITION':
-        finalExpression = `${directive} ${column} =~ "${this.state.customCondition}"`;
+        finalExpression = `${directive} ${this.state.customCondition}`;
         break;
       case 'ISNUMBER':
       case 'ISNOTNUMBER':
@@ -247,7 +247,7 @@ export default class MarkAsError extends Component {
           value={this.state.customCondition}
           onChange={this.handleCustomFilterChange}
           ref={ref => this.customConditionRef = ref}
-          placeholder={T.translate(`${PREFIX}.Placeholders.CUSTOMCONDITION`)}
+          placeholder={T.translate(`${PREFIX}.Placeholders.CUSTOMCONDITION`, {column: this.props.column})}
         />
       </div>
     );
