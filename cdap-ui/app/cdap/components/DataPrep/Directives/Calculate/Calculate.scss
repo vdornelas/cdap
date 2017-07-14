@@ -50,6 +50,7 @@ $option-hover-active-bg-color: #dddddd;
       cursor: pointer;
       line-height: 1.5;
       font-size: 13px;
+      position: relative;
 
       &.active,
       &:hover {

@@ -276,11 +276,10 @@ export default class Calculate extends Component {
     return (
       <div
         className="second-level-popover"
-        id="calculate-directive-popover"
         onClick={preventPropagation}
       >
         <div className="calculate-options">
-          <ScrollableList target="calculate-directive-popover">
+          <ScrollableList>
             {
               this.CALCULATE_OPTIONS.map((option) => {
                 if (option.name === 'divider') {
@@ -308,6 +307,11 @@ export default class Calculate extends Component {
                             <span className="fa fa-caret-right" />
                           </span>
                         )
+                      : null
+                    }
+                    {
+                      this.state.operationPopoverOpen === option.name ?
+                        this.renderThirdLevelPopover()
                       : null
                     }
                   </div>
@@ -455,7 +459,6 @@ export default class Calculate extends Component {
         </span>
 
         {this.renderDetail()}
-        {this.renderThirdLevelPopover()}
       </div>
     );
   }

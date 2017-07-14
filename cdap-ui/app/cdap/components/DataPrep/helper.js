@@ -45,10 +45,10 @@ export function isCustomOption(selectedOption) {
   return selectedOption.substr(0, 6) === 'CUSTOM';
 }
 
-export function setPopoverOffset(element, footer_height = 54) {
+export function setPopoverOffset(element, footerHeight = 54) {
   let elem = element;
   let elemBounding = elem.getBoundingClientRect();
-  const FOOTER_HEIGHT = footer_height;
+  const FOOTER_HEIGHT = footerHeight;
 
   let popover = document.getElementsByClassName('second-level-popover');
   let popoverHeight = popover[0].getBoundingClientRect().height;
@@ -62,7 +62,7 @@ export function setPopoverOffset(element, footer_height = 54) {
   if (diff < 0) {
     // this is to make sure the top doesn't go off screen
     if (diff < -popoverMenuItemTop + bodyTop) {
-      diff = -popoverMenuItemTop + bodyTop;
+      diff = -popoverMenuItemTop + bodyTop + 10; // pad 10px at the top so that popover isn't stuck at very top
     }
     popover[0].style.top = `${diff}px`;
     // This is to align the bottom of second level popover menu with that of the main menu

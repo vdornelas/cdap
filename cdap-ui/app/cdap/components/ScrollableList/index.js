@@ -47,10 +47,14 @@ export default class ScrollableList extends Component {
     });
   }
   computeHeight() {
-    let targetDimensions = document.getElementById(this.props.target).getBoundingClientRect();
-    let bodyBottom = document.body.getBoundingClientRect().bottom;
-    let targetTop = targetDimensions.top;
-    let heightOfList = bodyBottom - targetTop;
+    let heightOfList = document.body.getBoundingClientRect().height;
+    if (this.props.target) {
+      let targetTop = document.getElementById(this.props.target).getBoundingClientRect().top;
+      let bodyBottom = document.body.getBoundingClientRect().bottom;
+      let scrollDownHeight = 20;
+      heightOfList = bodyBottom - targetTop - scrollDownHeight;
+    }
+
     let numberOfElemsToDisplay = Math.floor(heightOfList / 39);
 
     let numberOfActualElements = this.props.children.filter(child => child.props.className.indexOf('column-action-divider') === -1);
