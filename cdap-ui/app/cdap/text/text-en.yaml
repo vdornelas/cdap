@@ -563,6 +563,18 @@ features:
         Conditions:
           CUSTOMCONDITION: Custom condition
           EMPTY: value is empty
+          ISNUMBER: Is Number
+          ISNOTNUMBER: Is Not Number
+          ISINTEGER: Is Integer
+          ISNOTINTEGER: Is Not Integer
+          ISDOUBLE: Is Double
+          ISNOTDOUBLE: Is Not Double
+          ISBOOLEAN: Is Boolean
+          ISNOTBOOLEAN: Is Not Boolean
+          ISDATE: Is Date
+          ISNOTDATE: Is Not Date
+          ISTIME: Is Time
+          ISNOTTIME: Is Not Time
           TEXTCONTAINS: value contains
           TEXTENDSWITH: value ends with
           TEXTEXACTLY: value is
@@ -577,7 +589,7 @@ features:
           TEXTEXACTLY: Enter value
           TEXTREGEX: Enter regex
           TEXTSTARTSWITH: Enter prefix
-        title: Mark as Error
+        title: Send to Error
       MaskData:
         menuLabel: Mask Data
         option1: Show last 4 characters only

@@ -36,6 +36,20 @@ const conditionsOptions = [
   'TEXTENDSWITH',
   'TEXTREGEX',
   'divider',
+  'ISNUMBER',
+  'ISNOTNUMBER',
+  'ISDOUBLE',
+  'ISNOTDOUBLE',
+  'ISINTEGER',
+  'ISNOTINTEGER',
+  'ISBOOLEAN',
+  'ISNOTBOOLEAN',
+  'divider',
+  'ISDATE',
+  'ISNOTDATE',
+  'ISTIME',
+  'ISNOTTIME',
+  'divider',
   'CUSTOMCONDITION'
 ];
 export default class MarkAsError extends Component {
@@ -88,7 +102,7 @@ export default class MarkAsError extends Component {
   };
 
   handleCustomFilterChange = (e) => {
-    this.setState({customFilter: e.target.value});
+    this.setState({customCondition: e.target.value});
   };
 
   toggleIgnoreCase = () => {
@@ -97,48 +111,88 @@ export default class MarkAsError extends Component {
     });
   };
 
+  getDQFunction(condition) {
+    let conditionToFnMap = {
+      'ISNUMBER' : 'isNumber',
+      'ISINTEGER' : 'isInteger',
+      'ISDOUBLE' : 'isDouble',
+      'ISBOOLEAN' : 'isBoolean',
+      'ISDATE' : 'isDate',
+      'ISTIME' : 'isTime'
+    };
+    let c = condition.replace('NOT', '');
+    return conditionToFnMap[c];
+  }
+
   getDirectiveExpression = () => {
-    let directive;
-    let condition = 'send-to-error';
+    let directive = 'send-to-error';
+    let condition;
     let column = this.props.column;
     let textValue = this.state.conditionValue;
+    let equalityOperator = '==';
+    let finalExpression;
 
     switch (this.state.selectedCondition) {
       case 'EMPTY':
-        directive = `${condition} empty(${column})`;
+        finalExpression = `${directive} empty(${column})`;
         break;
       case 'TEXTCONTAINS':
         if (this.state.ignoreCase) {
-          textValue = `(?i)${textValue}`;
+          textValue = `(?i).*${textValue}`;
+        } else {
+          textValue = `.*${textValue}`;
         }
-        directive = `${condition} "${column}" =~ "${textValue}.*"`;
+        finalExpression = `${directive} ${column} =~ "${textValue}.*"`;
         break;
       case 'TEXTSTARTSWITH':
+        equalityOperator = '=^';
         if (this.state.ignoreCase) {
-          textValue = `(?i)${textValue}`;
+          textValue = `(?i)^${textValue}.*`;
+          equalityOperator = '=~';
         }
-        directive = `${condition} "${column}" =^ "${textValue}"`;
+        finalExpression = `${directive} ${column} ${equalityOperator} "${textValue}"`;
         break;
       case 'TEXTENDSWITH':
+        equalityOperator = '=$';
         if (this.state.ignoreCase) {
-          textValue = `(?i)${textValue}`;
+          textValue = `(?i).*${textValue}$`;
+          equalityOperator = '=~';
         }
-        directive = `${condition} "${column}" =$ "${textValue}"`;
+        finalExpression = `${directive} ${column} ${equalityOperator} "${textValue}"`;
         break;
       case 'TEXTEXACTLY':
         if (this.state.ignoreCase) {
           textValue = `(?i)${textValue}`;
+          equalityOperator = `=~`;
         }
-        directive = `${condition} "${column}" == "${textValue}$"`;
+        finalExpression = `${directive} ${column} ${equalityOperator} "${textValue}"`;
         break;
       case 'TEXTREGEX':
-        directive = `${condition} "${column}" "${textValue}"`;
+        finalExpression = `${directive} ${column} =~ "${textValue}"`;
         break;
       case 'CUSTOMCONDITION':
-        directive = `${condition} "${column}" "${this.state.customCondition}"`;
+        finalExpression = `${directive} ${column} =~ "${this.state.customCondition}"`;
+        break;
+      case 'ISNUMBER':
+      case 'ISNOTNUMBER':
+      case 'ISINTEGER':
+      case 'ISNOTINTEGER':
+      case 'ISDOUBLE':
+      case 'ISNOTDOUBLE':
+      case 'ISBOOLEAN':
+      case 'ISNOTBOOLEAN':
+      case 'ISDATE':
+      case 'ISNOTDATE':
+      case 'ISTIME':
+      case 'ISNOTTIME':
+        condition = `dq:${this.getDQFunction(this.state.selectedCondition)}(${column})`;
+        if (this.state.selectedCondition.indexOf('NOT') !== -1) {
+          condition = `!${condition}`;
+        }
+        finalExpression = `${directive} ${condition}`;
         break;
     }
-    return directive;
+    return finalExpression;
   }
 
   renderTextCondition = () => {

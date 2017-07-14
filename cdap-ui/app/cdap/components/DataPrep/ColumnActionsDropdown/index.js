@@ -100,6 +100,10 @@ export default class ColumnActionsDropdown extends Component {
       },
       {
         id: shortid.generate(),
+        tag: MarkAsError
+      },
+      {
+        id: shortid.generate(),
         tag: FindAndReplaceDirective,
         requiredColCount: 1
       },
@@ -151,10 +155,6 @@ export default class ColumnActionsDropdown extends Component {
       },
       {
         tag: 'divider'
-      },
-      {
-        id: shortid.generate(),
-        tag: MarkAsError
       },
       {
         id: shortid.generate(),
