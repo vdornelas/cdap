@@ -20,18 +20,17 @@ import co.cask.cdap.api.data.DatasetContext;
 import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
-import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.Notification;
 import co.cask.cdap.proto.ProgramRunStatus;
-import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -85,8 +84,7 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
     protected void processNotification(DatasetContext context, Notification notification) throws Exception {
       // Required parameters
       Map<String, String> properties = notification.getProperties();
-      String programIdString = properties.get(ProgramOptionConstants.PROGRAM_ID);
-      String runIdString = properties.get(ProgramOptionConstants.RUN_ID);
+      String programRunIdString = properties.get(ProgramOptionConstants.PROGRAM_RUN_ID);
       String programStatusString = properties.get(ProgramOptionConstants.PROGRAM_STATUS);
 
       ProgramRunStatus programRunStatus = null;
@@ -94,62 +92,61 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
         try {
           programRunStatus = ProgramRunStatus.valueOf(programStatusString);
         } catch (IllegalArgumentException e) {
-          LOG.warn("Invalid program status {} passed for program {}", programStatusString, programIdString, e);
+          LOG.warn("Invalid program status {} passed for program {}", programStatusString, programRunIdString, e);
           // Fall through, let the thread return normally
         }
       }
 
       // Ignore notifications which specify an invalid ProgramId, RunId, or ProgramRunStatus
-      if (programIdString == null || runIdString == null || programRunStatus == null) {
+      if (programRunIdString == null || programRunStatus == null) {
         return;
       }
 
-      ProgramId programId = GSON.fromJson(programIdString, ProgramId.class);
+      ProgramRunId programRunId = GSON.fromJson(programRunIdString, ProgramRunId.class);
       String twillRunId = notification.getProperties().get(ProgramOptionConstants.TWILL_RUN_ID);
       Arguments userArguments = getArguments(properties, ProgramOptionConstants.USER_OVERRIDES);
       Arguments systemArguments = getArguments(properties, ProgramOptionConstants.SYSTEM_OVERRIDES);
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(programId, RunIds.fromString(runIdString), twillRunId,
-                                  userArguments, systemArguments, store);
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(store)
+        .withArguments(userArguments.asMap(), systemArguments.asMap());
 
       long startTime = getTime(notification.getProperties(), ProgramOptionConstants.LOGICAL_START_TIME);
       long endTime = getTime(notification.getProperties(), ProgramOptionConstants.END_TIME);
-      System.out.println("PERSIST " + programId + " with Status " + programRunStatus + " START " + startTime);
+      System.out.println("PERSIST " + programRunId + " with Status " + programRunStatus + " START " + startTime);
       switch(programRunStatus) {
         case STARTING:
           if (startTime == -1) {
-            LOG.debug("Start time not specified in notification for program id {}, not persisting" + programId);
+            LOG.debug("Start time not specified in notification for program id {}, not persisting" + programRunId);
             return;
           }
-          programStateWriter.start(startTime);
+          programStateWriter.start(programRunId, twillRunId, startTime);
           break;
         case RUNNING:
           if (startTime == -1) {
-            LOG.debug("Start time not specified in notification for program id {}, not persisting" + programId);
+            LOG.debug("Start time not specified in notification for program id {}, not persisting" + programRunId);
             return;
           }
-          programStateWriter.running(startTime);
+          programStateWriter.running(programRunId, twillRunId, startTime);
           break;
         case COMPLETED:
         case SUSPENDED:
         case KILLED:
           if (endTime == -1) {
-            LOG.debug("End time not specified in notification for program id {}, not persisting" + programId);
+            LOG.debug("End time not specified in notification for program id {}, not persisting" + programRunId);
             return;
           }
-          programStateWriter.stop(endTime, programRunStatus, null);
+          programStateWriter.stop(programRunId, endTime, programRunStatus, null);
           break;
         case FAILED:
           if (endTime == -1) {
-            LOG.debug("End time not specified in notification for program id {}, not persisting" + programId);
+            LOG.debug("End time not specified in notification for program id {}, not persisting" + programRunId);
             return;
           }
           BasicThrowable cause = GSON.fromJson(properties.get("error"), BasicThrowable.class);
-          programStateWriter.stop(endTime, ProgramRunStatus.FAILED, cause);
+          programStateWriter.stop(programRunId, endTime, ProgramRunStatus.FAILED, cause);
           break;
         default:
-          throw new IllegalArgumentException(String.format("Cannot persist ProgramRunStatus %s for ProgramId %s",
-                                                           programRunStatus.toString(), programId));
+          throw new IllegalArgumentException(String.format("Cannot persist ProgramRunStatus %s for Program %s",
+                                                           programRunStatus, programRunId));
       }
     }
 

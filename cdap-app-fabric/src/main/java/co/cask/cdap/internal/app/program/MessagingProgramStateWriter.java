@@ -81,7 +81,6 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
   public void stop(ProgramRunId programRunId, long endTime, ProgramRunStatus runStatus,
                    @Nullable BasicThrowable cause) {
     ImmutableMap.Builder builder = ImmutableMap.<String, String>builder()
-      .put(ProgramOptionConstants.PROGRAM_RUN_ID, GSON.toJson(programRunId))
       .put(ProgramOptionConstants.END_TIME, String.valueOf(endTime))
       .put(ProgramOptionConstants.PROGRAM_STATUS, runStatus.toString());
 
@@ -99,7 +98,6 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
     publish(
       programRunId, null,
       ImmutableMap.<String, String>builder()
-        .put(ProgramOptionConstants.PROGRAM_RUN_ID, GSON.toJson(programRunId))
         .put(ProgramOptionConstants.PROGRAM_STATUS, ProgramRunStatus.SUSPENDED.toString())
     );
   }
@@ -109,7 +107,6 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
     publish(
       programRunId, null,
       ImmutableMap.<String, String>builder()
-        .put(ProgramOptionConstants.PROGRAM_RUN_ID, GSON.toJson(programRunId))
         .put(ProgramOptionConstants.PROGRAM_STATUS, ProgramRunStatus.RUNNING.toString())
     );
   }
