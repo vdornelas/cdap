@@ -51,7 +51,7 @@ public class LookupSource extends RealtimeSource<StructuredRecord> {
   private final Config config;
   private Set<String> fields;
   private Schema schema;
-  private Lookup<String> lookup;
+  private Lookup<String, byte[]> lookup;
 
   public LookupSource(Config config) {
     this.config = config;
