@@ -23,7 +23,8 @@ CDAP Pipelines
 
 .. toctree::
     :hidden:
-    Plugins <plugins>
+    
+    plugins
 
 Data Pipelines allow you to ingest, transform, and load data, taking advantage of CDAP's ability to translate transformations and programmatic logic into parallelized computations using Spark and MapReduce. Data Pipelines help users to create complex data processing workflows (both batch and realtime) using an intuitive UI. By providing easy access to logs and metrics, pipelines also offer easy ways for administrators to operationalize their data processing workflows without the need for a lot of custom tooling.
 

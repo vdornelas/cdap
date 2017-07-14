@@ -23,7 +23,8 @@ Plugin Reference
 
 .. toctree::
     :hidden:
-    Plugins <plugins>
+    
+    plugins
 
 These plugins (from CDAP Pipelines Version |cdap-pipelines-version|) are shipped with CDAP, both in the
 CDAP Sandbox and Distributed CDAP:
