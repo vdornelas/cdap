@@ -25,10 +25,10 @@ import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
-import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.schedule.store.Schedulers;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.messaging.client.StoreRequestBuilder;
 import co.cask.cdap.proto.BasicThrowable;
@@ -117,7 +117,7 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
       String twillRunId = notification.getProperties().get(ProgramOptionConstants.TWILL_RUN_ID);
       Arguments userArguments = getArguments(properties, ProgramOptionConstants.USER_OVERRIDES);
       Arguments systemArguments = getArguments(properties, ProgramOptionConstants.SYSTEM_OVERRIDES);
-      ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(store)
         .withArguments(userArguments.asMap(), systemArguments.asMap());
 
       long startTime = getTime(notification.getProperties(), ProgramOptionConstants.LOGICAL_START_TIME);
@@ -170,8 +170,8 @@ public class ProgramStatusPersistService extends AbstractNotificationSubscriberS
           TopicId programStatusTriggerTopic =
             NamespaceId.SYSTEM.topic(cConf.get(Constants.Scheduler.PROGRAM_STATUS_EVENT_TOPIC));
           messagingService.publish(StoreRequestBuilder.of(programStatusTriggerTopic)
-                  .addPayloads(GSON.toJson(notification))
-                  .build());
+                          .addPayloads(GSON.toJson(notification))
+                          .build());
         }
       }
     }

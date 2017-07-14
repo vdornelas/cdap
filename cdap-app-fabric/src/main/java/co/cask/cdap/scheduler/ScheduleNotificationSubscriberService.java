@@ -39,6 +39,7 @@ import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.DatasetId;
 import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import co.cask.cdap.proto.id.ScheduleId;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
@@ -188,25 +189,25 @@ class ScheduleNotificationSubscriberService extends AbstractNotificationSubscrib
     protected void processNotification(DatasetContext context, Notification notification)
       throws IOException, DatasetManagementException {
 
-      String programIdString = notification.getProperties().get(ProgramOptionConstants.PROGRAM_ID);
-      String programRunId = notification.getProperties().get(ProgramOptionConstants.RUN_ID);
+      String programRunIdString = notification.getProperties().get(ProgramOptionConstants.PROGRAM_RUN_ID);
       String programStatusString = notification.getProperties().get(ProgramOptionConstants.PROGRAM_STATUS);
 
       ProgramStatus programStatus = null;
       try {
         programStatus = ProgramStatus.valueOf(programStatusString);
       } catch (IllegalArgumentException e) {
-        LOG.warn("Invalid program status {} passed for programId {}", programStatusString, programIdString, e);
+        LOG.warn("Invalid program status {} passed for programId {}", programStatusString, programRunIdString, e);
         // Fall through, let the thread return normally
       }
 
       // Ignore notifications which specify an invalid ProgramId, RunId, or ProgramStatus
-      if (programIdString == null || programRunId == null || programStatus == null) {
+      if (programRunIdString == null || programStatus == null) {
         return;
       }
 
-      ProgramId programId = GSON.fromJson(programIdString, ProgramId.class);
-      String triggerKeyForProgramStatus = Schedulers.triggerKeyForProgramStatus(programId, programStatus);
+      ProgramRunId programRunId = GSON.fromJson(programRunIdString, ProgramRunId.class);
+      String triggerKeyForProgramStatus = Schedulers.triggerKeyForProgramStatus(programRunId.getParent(),
+                                                                                programStatus);
 
       for (ProgramScheduleRecord schedule : getSchedules(context, triggerKeyForProgramStatus)) {
         if (schedule.getMeta().getStatus() == ProgramScheduleStatus.SCHEDULED) {

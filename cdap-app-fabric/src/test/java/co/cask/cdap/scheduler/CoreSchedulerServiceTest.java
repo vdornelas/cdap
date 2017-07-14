@@ -17,7 +17,6 @@
 package co.cask.cdap.scheduler;
 
 import co.cask.cdap.AppWithFrequentScheduledWorkflows;
-import co.cask.cdap.AppWithMultipleWorkflows;
 import co.cask.cdap.api.ProgramStatus;
 import co.cask.cdap.api.Transactional;
 import co.cask.cdap.api.Transactionals;
@@ -26,8 +25,6 @@ import co.cask.cdap.api.common.Bytes;
 import co.cask.cdap.api.data.DatasetContext;
 import co.cask.cdap.api.dataset.lib.CloseableIterator;
 import co.cask.cdap.api.dataset.lib.PartitionKey;
-import co.cask.cdap.api.workflow.Value;
-import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.AlreadyExistsException;
@@ -42,8 +39,7 @@ import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.dataset2.DynamicDatasetCache;
 import co.cask.cdap.data2.dataset2.MultiThreadDatasetCache;
 import co.cask.cdap.data2.transaction.Transactions;
-import co.cask.cdap.internal.app.program.ProgramEventPublisher;
-import co.cask.cdap.internal.app.runtime.BasicArguments;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramSchedule;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramScheduleStatus;
@@ -101,7 +97,6 @@ import javax.annotation.Nullable;
 
 public class CoreSchedulerServiceTest extends AppFabricTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(CoreSchedulerServiceTest.class);
-  private static final Map<String, String> EMPTY_STRING_MAP = ImmutableMap.of();
 
   private static final NamespaceId NS_ID = new NamespaceId("schedtest");
   private static final ApplicationId APP1_ID = NS_ID.app("app1");
@@ -141,7 +136,6 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
 
   private static Scheduler scheduler;
   private static Transactional transactional;
-  private static ProgramStateWriter programStateWriter;
 
   @BeforeClass
   public static void beforeClass() throws Throwable {
@@ -369,17 +363,14 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     // instead of through the ProgramStatusPersistService
     cConf.set(Constants.AppFabric.PROGRAM_STATUS_EVENT_TOPIC,
               cConf.get(Constants.Scheduler.PROGRAM_STATUS_EVENT_TOPIC));
-    programStateWriter = new ProgramEventPublisher(SCHEDULED_WORKFLOW_1, RunIds.generate(), null,
-                                                   new BasicArguments(EMPTY_STRING_MAP),
-                                                   new BasicArguments(EMPTY_STRING_MAP), null,
-                                                   cConf, messagingService);
+    ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService);
 
     long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
 
     // These notifications should not trigger the program
     long lastProcessed = System.currentTimeMillis();
-    programStateWriter.stop(nowSec, ProgramRunStatus.COMPLETED, null);
-    programStateWriter.stop(nowSec, ProgramRunStatus.KILLED, null);
+    programStateWriter.stop(WORKFLOW_1.run(RunIds.generate()), nowSec, ProgramRunStatus.COMPLETED, null);
+    programStateWriter.stop(WORKFLOW_1.run(RunIds.generate()), nowSec, ProgramRunStatus.KILLED, null);
     waitUntilProcessed(programEventTopic, lastProcessed);
     Assert.assertEquals(0, getRuns(SCHEDULED_WORKFLOW_3));
 
@@ -396,12 +387,12 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     enableSchedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
 
     lastProcessed = System.currentTimeMillis();
-    programStateWriter.stop(nowSec, ProgramRunStatus.KILLED, null);
+    programStateWriter.stop(SCHEDULED_WORKFLOW_1.run(RunIds.generate()), nowSec, ProgramRunStatus.KILLED, null);
     waitUntilProcessed(programEventTopic, lastProcessed);
     waitForCompleteRuns(1, SCHEDULED_WORKFLOW_3);
 
     lastProcessed = System.currentTimeMillis();
-    programStateWriter.stop(nowSec, ProgramRunStatus.COMPLETED, null);
+    programStateWriter.stop(SCHEDULED_WORKFLOW_1.run(RunIds.generate()), nowSec, ProgramRunStatus.COMPLETED, null);
     waitUntilProcessed(programEventTopic, lastProcessed);
     waitForCompleteRuns(2, SCHEDULED_WORKFLOW_3);
 
