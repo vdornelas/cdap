@@ -91,6 +91,7 @@ import org.hamcrest.CoreMatchers;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
@@ -116,6 +117,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -287,6 +289,9 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Assert.assertEquals(2, history.size());
     Assert.assertEquals(ProgramRunStatus.STARTING, history.get(0).getStatus());
     Assert.assertEquals(ProgramRunStatus.RUNNING, history.get(1).getStatus());
+
+    countService.stop();
+    countService.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Test
@@ -429,6 +434,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Gson gson = new Gson();
     Assert.assertEquals("tV1", gson.fromJson(callServiceGet(serviceURL, "ping"), String.class));
     serviceManager.stop();
+    serviceManager.waitForStatus(false);
 
     appId = new ApplicationId(NamespaceId.DEFAULT.getNamespace(), "AppV1", "version2");
     createRequest = new AppRequest<>(
@@ -441,6 +447,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     serviceURL = serviceManager.getServiceURL();
     Assert.assertEquals("tV2", gson.fromJson(callServiceGet(serviceURL, "ping"), String.class));
     serviceManager.stop();
+    serviceManager.waitForStatus(false);
   }
 
   private void testAppConfig(String appName, ApplicationManager appManager,
@@ -455,6 +462,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     RuntimeMetrics metrics = flowManager.getFlowletMetrics(ConfigTestApp.FLOWLET_NAME);
     metrics.waitForProcessed(2, 1, TimeUnit.MINUTES);
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
     DataSetManager<KeyValueTable> dsManager = getDataset(datasetName);
     KeyValueTable table = dsManager.get();
     Assert.assertEquals("abcd", Bytes.toString(table.read(appName + ".abcd")));
@@ -603,6 +611,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     WorkflowManager workflowManager = appManager.getWorkflowManager(DatasetWithCustomActionApp.CUSTOM_WORKFLOW).start();
     workflowManager.waitForRun(ProgramRunStatus.COMPLETED, 2, TimeUnit.MINUTES);
     appManager.stopAll();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     DataSetManager<KeyValueTable> outTableManager = getDataset(DatasetWithCustomActionApp.CUSTOM_TABLE);
     KeyValueTable outputTable = outTableManager.get();
@@ -812,6 +821,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
   @Category(XSlowTests.class)
   @Test
+  @Ignore
   public void testDeployWorkflowApp() throws Exception {
     ApplicationManager applicationManager = deployApplication(testSpace, AppWithSchedule.class);
     final WorkflowManager wfmanager = applicationManager.getWorkflowManager("SampleWorkflow");
@@ -839,7 +849,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     wfmanager.getSchedule(scheduleName).suspend();
     waitForScheduleState(scheduleName, wfmanager, ProgramScheduleStatus.SUSPENDED);
 
-    TimeUnit.SECONDS.sleep(3); // Sleep for three seconds to make sure scheduled workflows are pending to run
+    TimeUnit.SECONDS.sleep(3); // Sleep to make sure scheduled workflows are pending to run
     // All runs should be completed
     Tasks.waitFor(true, new Callable<Boolean>() {
       @Override
@@ -978,6 +988,10 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     terminalMetrics.waitForProcessed(3, 60, TimeUnit.SECONDS);
     TimeUnit.SECONDS.sleep(1);
 
+    // stop the flow
+    flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
+
     ServiceManager queryManager = applicationManager.getServiceManager("QueryService").start();
     queryManager.waitForStatus(true, 2, 1);
     URL serviceURL = queryManager.getServiceURL();
@@ -986,6 +1000,10 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Assert.assertEquals("testing 1", gson.fromJson(callServiceGet(serviceURL, "input1"), String.class));
     Assert.assertEquals("testing 2", gson.fromJson(callServiceGet(serviceURL, "input2"), String.class));
     Assert.assertEquals("testing 3", gson.fromJson(callServiceGet(serviceURL, "input3"), String.class));
+
+    // stop the service
+    queryManager.stop();
+    queryManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Category(XSlowTests.class)
@@ -1000,10 +1018,10 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     ApplicationManager applicationManager = deployApplication(AppUsingGetServiceURL.class);
     ServiceManager centralServiceManager =
       applicationManager.getServiceManager(AppUsingGetServiceURL.CENTRAL_SERVICE).start();
-    centralServiceManager.waitForStatus(true);
+    centralServiceManager.waitForRun(ProgramRunStatus.RUNNING, 10, TimeUnit.SECONDS);
 
     WorkerManager pingingWorker = applicationManager.getWorkerManager(AppUsingGetServiceURL.PINGING_WORKER).start();
-    pingingWorker.waitForStatus(true);
+    pingingWorker.waitForRun(ProgramRunStatus.COMPLETED, 10, TimeUnit.SECONDS);
 
     // Test service's getServiceURL
     ServiceManager serviceManager = applicationManager.getServiceManager(AppUsingGetServiceURL.FORWARDING).start();
@@ -1017,6 +1035,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Assert.assertEquals(AppUsingGetServiceURL.ANSWER, decodedResult);
 
     serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // Program manager is not notified when worker stops on its own, hence suppressing the exception.
     // JIRA - CDAP-3656
@@ -1025,10 +1044,9 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     } catch (Throwable e) {
       LOG.error("Got exception while stopping pinging worker", e);
     }
-    pingingWorker.waitForStatus(false);
 
     centralServiceManager.stop();
-    centralServiceManager.waitForStatus(false);
+    centralServiceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   /**
@@ -1114,7 +1132,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     if (workerManager.isRunning()) {
       workerManager.stop();
     }
-    workerManager.waitForStatus(false);
+    workerManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // Should be same instances after being stopped.
     workerInstancesCheck(lifecycleWorkerManager, 5);
@@ -1173,7 +1191,6 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
       }
     }, 10, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
 
-    manager.stop();
     applicationManager.stopAll();
 
     // Wait for stop state
@@ -1477,6 +1494,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     WorkerManager workerManager = manager.getWorkerManager("NoOpWorker");
     workerManager.start();
     workerManager.waitForStatus(false, 30, 1);
+    workerManager.waitForRun(ProgramRunStatus.COMPLETED, 10, TimeUnit.SECONDS);
   }
 
   @Category(SlowTests.class)
@@ -1541,7 +1559,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     datasetWorkerServiceManager.waitForStatus(true);
 
     ServiceManager noopManager = applicationManager.getServiceManager("NoOpService").start();
-    serviceManager.waitForStatus(true, 2, 1);
+    noopManager.waitForStatus(true, 2, 1);
 
     String result = callServiceGet(noopManager.getServiceURL(), "ping/" + AppWithServices.DATASET_TEST_KEY);
     String decodedResult = new Gson().fromJson(result, String.class);
@@ -1569,7 +1587,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     datasetWorkerServiceManager.waitForStatus(false);
     LOG.info("DatasetUpdateService Stopped");
     serviceManager.stop();
-    serviceManager.waitForStatus(false);
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
     LOG.info("ServerService Stopped");
 
     result = callServiceGet(noopManager.getServiceURL(), "ping/" + AppWithServices.DATASET_TEST_KEY_STOP);
@@ -1579,6 +1597,9 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     result = callServiceGet(noopManager.getServiceURL(), "ping/" + AppWithServices.DATASET_TEST_KEY_STOP_2);
     decodedResult = new Gson().fromJson(result, String.class);
     Assert.assertEquals(AppWithServices.DATASET_TEST_VALUE_STOP_2, decodedResult);
+
+    noopManager.stop();
+    noopManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Test
@@ -1635,7 +1656,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
     executorService.shutdown();
     serviceManager.stop();
-    serviceManager.waitForStatus(false);
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     DataSetManager<KeyValueTable> dsManager = getDataset(testSpace.dataset(AppWithServices.TRANSACTIONS_DATASET_NAME));
     String value = Bytes.toString(dsManager.get().read(AppWithServices.DESTROY_KEY));
@@ -1647,6 +1668,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
     ApplicationManager applicationManager = deployApplication(app);
     FlowManager flowManager = applicationManager.getFlowManager("WordCountFlow").start();
+    flowManager.waitForRun(ProgramRunStatus.RUNNING, 10, TimeUnit.SECONDS);
 
     // Send some inputs to streams
     StreamManager streamManager = getStreamManager(streamName);
@@ -1698,11 +1720,19 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     // also test the deprecated version of getDataset(). This can be removed when we remove the method
     mydatasetManager = getDataset("mydataset");
     Assert.assertEquals(100L, Long.valueOf(mydatasetManager.get().get("title:title")).longValue());
+
+    // stop the service
+    serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
+
+    // stop the flow
+    flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Category(SlowTests.class)
   @Test
-  public void testGenerator() throws InterruptedException, IOException, TimeoutException {
+  public void testGenerator() throws InterruptedException, IOException, TimeoutException, ExecutionException {
     ApplicationManager applicationManager = deployApplication(testSpace, GenSinkApp2.class);
     FlowManager flowManager = applicationManager.getFlowManager("GenSinkFlow").start();
 
@@ -1724,6 +1754,9 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Assert.assertEquals(0L, batchSinkMetrics.getException());
 
     Assert.assertEquals(1L, genMetrics.getException());
+
+    flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Category(SlowTests.class)
@@ -1783,6 +1816,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     RuntimeMetrics flowletMetrics = flowManager.getFlowletMetrics("Consumer");
     flowletMetrics.waitForProcessed(1, 5, TimeUnit.SECONDS);
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
     Assert.assertEquals(1, flowletMetrics.getProcessed());
     getMetricsManager().resetAll();
     // check the metrics were deleted after reset
@@ -1821,6 +1855,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     flowletMetrics.waitForProcessed(4, 10, TimeUnit.SECONDS);
 
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     DataSetManager<Table> dataSetManager = getDataset(testSpace.dataset("conf"));
     Table confTable = dataSetManager.get();
@@ -1912,6 +1947,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
       ClusterNameTestApp.ClusterNameServiceHandler.class.getSimpleName()).start();
     Assert.assertEquals(clusterName, callServiceGet(serviceManager.getServiceURL(10, TimeUnit.SECONDS), "clusterName"));
     serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // Worker
     WorkerManager workerManager = appManager.getWorkerManager(
@@ -1927,6 +1963,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     key.set("flow.cluster.name");
     Tasks.waitFor(clusterName, readClusterName, 10, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // MapReduce
     // Setup the input file used by MR
@@ -1995,6 +2032,8 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     callServicePut(serviceManager.getServiceURL(), "key1", "value1");
     String response = callServiceGet(serviceManager.getServiceURL(), "key1");
     Assert.assertEquals("value1", new Gson().fromJson(response, String.class));
+    serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Category(XSlowTests.class)
@@ -2009,6 +2048,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     RuntimeMetrics flowMetrics = flowManager.getFlowletMetrics("Sink");
     flowMetrics.waitForProcessed(10, 5000, TimeUnit.MILLISECONDS);
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     ServiceManager serviceManager = appManager.getServiceManager("RecordQuery").start();
     URL serviceURL = serviceManager.getServiceURL(15, TimeUnit.SECONDS);
@@ -2022,6 +2062,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
     long count = Long.parseLong(response.getResponseBodyAsString());
     serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // Verify the record count with dataset
     DataSetManager<KeyValueTable> recordsManager = getDataset(testSpace.dataset("records"));
@@ -2042,6 +2083,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
       Assert.assertTrue(Throwables.getRootCause(e) instanceof ConflictException);
     }
     workerManager.stop();
+    workerManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
 
     // Start the workflow
     File tmpDir = TEMP_FOLDER.newFolder();

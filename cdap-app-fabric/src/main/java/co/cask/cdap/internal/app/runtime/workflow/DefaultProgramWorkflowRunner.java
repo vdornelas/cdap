@@ -31,6 +31,7 @@ import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.runtime.WorkflowTokenProvider;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
+import co.cask.cdap.internal.app.program.MessagingProgramStateWriter;
 import co.cask.cdap.internal.app.runtime.AbstractListener;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
@@ -152,7 +153,7 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     // Publish the program's starting state
     RunId runId = ProgramRunners.getRunId(options);
     String twillRunId = options.getArguments().getOption(ProgramOptionConstants.TWILL_RUN_ID);
-    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(cConf, messagingService)
+    ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
       .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
     programStateWriter.start(program.getId().run(runId), twillRunId, System.currentTimeMillis());
 
