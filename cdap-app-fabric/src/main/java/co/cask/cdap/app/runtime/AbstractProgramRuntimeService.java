@@ -143,7 +143,7 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
     } catch (Exception e) {
       // Set the program state to an error when an exception is thrown
       long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(e.getCause()));
+      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(new Throwable(e.getMessage())));
       cleanUpTask.run();
       LOG.error("Exception while trying to run program", e);
       throw Throwables.propagate(e);
