@@ -412,7 +412,7 @@ the scope here refers to the scope of the parent artifact. In this example it is
 scope because ``cdap-data-pipeline`` is a system artifact. This is true even if you deployed
 ``custom-transforms`` as a user artifact because the parent is still a system artifact.
 
-.. _user-guide-plugins-use-case:
+.. _user-guide-sub-plugins-use-case:
 
 Example Use Case
 ================
