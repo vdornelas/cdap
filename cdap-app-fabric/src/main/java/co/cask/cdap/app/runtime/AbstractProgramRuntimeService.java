@@ -108,11 +108,15 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
 
   @Override
   public final RuntimeInfo run(ProgramDescriptor programDescriptor, ProgramOptions options) {
-    final ProgramId programId = programDescriptor.getProgramId();
+    ProgramId programId = programDescriptor.getProgramId();
 
     ProgramRunner runner = programRunnerFactory.create(programId.getType());
-    final RunId runId = RunIds.generate();
-    ProgramStateWriter programStateWriter = null;
+    RunId runId = RunIds.generate();
+    Arguments userArguments = options.getUserArguments();
+    Arguments systemArguments = options.getArguments();
+    String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
+    ProgramStateWriter programStateWriter = new ProgramStorePublisher(programId, runId, twillRunId,
+                                                                      userArguments, systemArguments, runtimeStore);
     File tempDir = createTempDirectory(programId, runId);
     Runnable cleanUpTask = createCleanupTask(tempDir, runner);
     try {
@@ -130,11 +134,6 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       cleanUpTask = createCleanupTask(cleanUpTask, executableProgram);
 
       // Publish the program's starting state
-      final Arguments userArguments = options.getUserArguments();
-      final Arguments systemArguments = options.getArguments();
-      final String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
-      programStateWriter = new ProgramStorePublisher(programId, runId, twillRunId, userArguments,
-                                                     systemArguments, runtimeStore);
       programStateWriter.start(System.currentTimeMillis());
 
       ProgramController controller = runner.run(executableProgram, optionsWithPlugins);
@@ -143,8 +142,8 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       return runtimeInfo;
     } catch (Exception e) {
       // Set the program state to an error when an exception is thrown
-      Runnable setStateToError = createProgramStatusTask(programStateWriter, e);
-      cleanUpTask = createCleanupTask(cleanUpTask, setStateToError);
+      long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(e.getCause()));
       cleanUpTask.run();
       LOG.error("Exception while trying to run program", e);
       throw Throwables.propagate(e);
@@ -178,16 +177,6 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       throw Throwables.propagate(e);
     }
     return Programs.create(cConf, programRunner, programDescriptor, programJarLocation, unpackedDir);
-  }
-
-  private Runnable createProgramStatusTask(final ProgramStateWriter writer, final Exception e) {
-    return new Runnable() {
-      @Override
-      public void run() {
-        long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        writer.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(e.getCause()));
-      }
-    };
   }
 
   private Runnable createCleanupTask(final Object... resources) {
