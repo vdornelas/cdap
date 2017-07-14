@@ -29,7 +29,7 @@ import co.cask.cdap.internal.app.runtime.AbstractListener;
 import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.SimpleProgramOptions;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import com.google.common.base.Function;
 import com.google.common.base.Throwables;
 import com.google.common.collect.HashBasedTable;
@@ -89,9 +89,7 @@ public abstract class AbstractInMemoryProgramRunner implements ProgramRunner {
         components.put(program.getName(), instanceId, controller);
       }
 
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(program.getId(), runId, null,
-                                  options.getUserArguments(), options.getArguments(), runtimeStore);
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore);
       return new InMemoryProgramController(components, program, runId, options, programStateWriter);
     } catch (Throwable t) {
       LOG.error("Failed to start all program instances", t);
@@ -138,7 +136,7 @@ public abstract class AbstractInMemoryProgramRunner implements ProgramRunner {
     InMemoryProgramController(Table<String, Integer, ProgramController> components,
                               Program program, RunId runId, ProgramOptions options,
                               ProgramStateWriter programStateWriter) {
-      super(program.getId(), runId, programStateWriter, null);
+      super(program.getId().run(runId), null, programStateWriter, null);
       this.program = program;
       this.components = components;
       this.options = options;

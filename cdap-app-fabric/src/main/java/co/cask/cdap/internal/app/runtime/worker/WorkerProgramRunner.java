@@ -32,17 +32,17 @@ import co.cask.cdap.app.stream.StreamWriterFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.data.ProgramContextAware;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
-import co.cask.cdap.internal.app.program.AbstractStateChangeProgramController;
 import co.cask.cdap.internal.app.runtime.AbstractProgramRunnerWithPlugin;
 import co.cask.cdap.internal.app.runtime.BasicProgramContext;
 import co.cask.cdap.internal.app.runtime.ProgramControllerServiceAdapter;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.Service;
@@ -146,10 +146,9 @@ public class WorkerProgramRunner extends AbstractProgramRunnerWithPlugin {
         }
       }, Threads.SAME_THREAD_EXECUTOR);
 
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(program.getId(), runId, twillRunId,
-                                  options.getUserArguments(), options.getArguments(), runtimeStore);
-      ProgramController controller = new WorkerControllerServiceAdapter(worker, program.getId(), runId,
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
+      ProgramController controller = new WorkerControllerServiceAdapter(worker, program.getId().run(runId), twillRunId,
                                                                         programStateWriter,
                                                                         workerSpec.getName() + "-" + instanceId);
       worker.start();
@@ -163,9 +162,9 @@ public class WorkerProgramRunner extends AbstractProgramRunnerWithPlugin {
   private static final class WorkerControllerServiceAdapter extends ProgramControllerServiceAdapter {
     private final WorkerDriver workerDriver;
 
-    WorkerControllerServiceAdapter(WorkerDriver workerDriver, ProgramId programId, RunId runId,
+    WorkerControllerServiceAdapter(WorkerDriver workerDriver, ProgramRunId programRunId, String twillRunId,
                                    ProgramStateWriter programStateWriter, String componentName) {
-      super(workerDriver, programId, runId, programStateWriter, componentName);
+      super(workerDriver, programRunId, twillRunId, programStateWriter, componentName);
       this.workerDriver = workerDriver;
     }
 

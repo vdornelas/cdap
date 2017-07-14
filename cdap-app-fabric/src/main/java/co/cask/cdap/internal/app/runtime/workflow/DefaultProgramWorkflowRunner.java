@@ -23,7 +23,6 @@ import co.cask.cdap.api.workflow.WorkflowSpecification;
 import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.program.Programs;
-import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.app.runtime.ProgramOptions;
 import co.cask.cdap.app.runtime.ProgramRunner;
@@ -31,7 +30,6 @@ import co.cask.cdap.app.runtime.ProgramRunnerFactory;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.runtime.WorkflowTokenProvider;
 import co.cask.cdap.app.store.RuntimeStore;
-import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.internal.app.runtime.AbstractListener;
@@ -39,7 +37,7 @@ import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.SimpleProgramOptions;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
@@ -58,7 +56,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
@@ -154,12 +151,10 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
 
     // Publish the program's starting state
     RunId runId = ProgramRunners.getRunId(options);
-    final Arguments userArguments = options.getUserArguments();
-    final Arguments systemArguments = options.getArguments();
-    final String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
-    ProgramStateWriter programStateWriter = new ProgramStorePublisher(program.getId(), runId, twillRunId,
-                                                                      userArguments, systemArguments, store);
-    programStateWriter.start(System.currentTimeMillis());
+    String twillRunId = options.getArguments().getOption(ProgramOptionConstants.TWILL_RUN_ID);
+    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(store)
+      .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
+    programStateWriter.start(program.getId().run(runId), twillRunId, System.currentTimeMillis());
 
     ProgramController controller;
     try {
@@ -167,8 +162,8 @@ final class DefaultProgramWorkflowRunner implements ProgramWorkflowRunner {
     } catch (Throwable t) {
       // If there is any exception when running the program, close the program to release resources.
       // Otherwise it will be released when the execution completed.
-      long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(t));
+      programStateWriter.stop(program.getId().run(runId), System.currentTimeMillis(), ProgramRunStatus.FAILED,
+                              new BasicThrowable(t));
       Closeables.closeQuietly(closeable);
       throw t;
     }

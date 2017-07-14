@@ -139,7 +139,7 @@ public class AbstractProgramRuntimeServiceTest {
     Service service = new TestService();
     ProgramId programId = NamespaceId.DEFAULT.app("dummyApp").program(ProgramType.WORKER, "dummy");
     RunId runId = RunIds.generate();
-    ProgramRuntimeService.RuntimeInfo extraInfo = createRuntimeInfo(service, programId, runId);
+    ProgramRuntimeService.RuntimeInfo extraInfo = createRuntimeInfo(service, programId.run(runId));
     service.startAndWait();
 
     ProgramRunnerFactory runnerFactory = createProgramRunnerFactory();
@@ -255,8 +255,9 @@ public class AbstractProgramRuntimeServiceTest {
             argumentsMap.put(program.getId(), options.getUserArguments());
 
             Service service = new FastService();
-            ProgramController controller = new ProgramControllerServiceAdapter(service, program.getId(),
-                                                                               RunIds.generate(),
+            ProgramController controller = new ProgramControllerServiceAdapter(service,
+                                                                               program.getId().run(RunIds.generate()),
+                                                                               null,
                                                                                new NoOpProgramStateWriter());
             service.start();
             return controller;
@@ -373,9 +374,9 @@ public class AbstractProgramRuntimeServiceTest {
   }
 
   private ProgramRuntimeService.RuntimeInfo createRuntimeInfo(Service service,
-                                                              final ProgramId programId, RunId runId) {
+                                                              final ProgramRunId programRunId) {
     final ProgramControllerServiceAdapter controller =
-      new ProgramControllerServiceAdapter(service, programId, runId, new NoOpProgramStateWriter());
+      new ProgramControllerServiceAdapter(service, programRunId, null, new NoOpProgramStateWriter());
     return new ProgramRuntimeService.RuntimeInfo() {
       @Override
       public ProgramController getController() {
@@ -384,12 +385,12 @@ public class AbstractProgramRuntimeServiceTest {
 
       @Override
       public ProgramType getType() {
-        return programId.getType();
+        return programRunId.getType();
       }
 
       @Override
       public ProgramId getProgramId() {
-        return programId;
+        return programRunId.getParent();
       }
 
       @Nullable

@@ -24,9 +24,8 @@ import co.cask.cdap.internal.app.runtime.AbstractProgramController;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
-import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.util.concurrent.Service;
-import org.apache.twill.api.RunId;
 import org.apache.twill.common.Threads;
 import org.apache.twill.internal.ServiceListenerAdapter;
 import org.slf4j.Logger;
@@ -43,24 +42,25 @@ public abstract class AbstractStateChangeProgramController extends AbstractProgr
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractStateChangeProgramController.class);
 
-  public AbstractStateChangeProgramController(Service service, final ProgramId programId, final RunId runId,
+  public AbstractStateChangeProgramController(Service service, final ProgramRunId programRunId, final String twillRunId,
                                               final ProgramStateWriter programStateWriter,
                                               @Nullable String componentName) {
-    super(programId, runId, componentName);
+    super(programRunId.getParent(), RunIds.fromString(programRunId.getRun()), componentName);
 
     // Add listener to the service for Spark and MapReduce programs
-    if (programId.getType() == ProgramType.MAPREDUCE || programId.getType() == ProgramType.SPARK) {
+    if (programRunId.getType() == ProgramType.MAPREDUCE || programRunId.getType() == ProgramType.SPARK) {
       service.addListener(
         new ServiceListenerAdapter() {
           @Override
           public void starting() {
             // Get start time from RunId
-            long startTimeInSeconds = RunIds.getTime(runId, TimeUnit.SECONDS);
-            if (startTimeInSeconds == -1) {
+            long startTime = TimeUnit.SECONDS.toMillis(RunIds.getTime(RunIds.fromString(programRunId.getRun()),
+                                                                      TimeUnit.SECONDS));
+            if (startTime == -1) {
               // If RunId is not time-based, use current time as start time
-              startTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+              startTime = System.currentTimeMillis();
             }
-            programStateWriter.running(startTimeInSeconds);
+            programStateWriter.running(programRunId, twillRunId, startTime);
           }
 
           @Override
@@ -70,14 +70,12 @@ public abstract class AbstractStateChangeProgramController extends AbstractProgr
               // Service was killed
               runStatus = ProgramController.State.KILLED.getRunStatus();
             }
-            long endTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-            programStateWriter.stop(endTimeInSeconds, runStatus, null);
+            programStateWriter.stop(programRunId, System.currentTimeMillis(), runStatus, null);
           }
 
           @Override
           public void failed(Service.State from, @Nullable final Throwable failure) {
-            long endTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-            programStateWriter.stop(endTimeInSeconds, State.ERROR.getRunStatus(),
+            programStateWriter.stop(programRunId, System.currentTimeMillis(), State.ERROR.getRunStatus(),
                                     new BasicThrowable(failure));
           }
         },
@@ -86,68 +84,71 @@ public abstract class AbstractStateChangeProgramController extends AbstractProgr
     }
   }
 
-  public AbstractStateChangeProgramController(final ProgramId programId, final RunId runId,
+  public AbstractStateChangeProgramController(final ProgramRunId programRunId, final String twillRunId,
                                               final ProgramStateWriter programStateWriter,
                                               @Nullable String componentName) {
-    super(programId, runId, componentName);
+    super(programRunId.getParent(), RunIds.fromString(programRunId.getRun()), componentName);
 
     addListener(
       new AbstractListener() {
         @Override
         public void init(ProgramController.State state, @Nullable Throwable cause) {
-          if (state == ProgramController.State.ALIVE) {
-            alive();
-          } else if (state == ProgramController.State.COMPLETED) {
-            completed();
-          } else if (state == ProgramController.State.ERROR) {
-            error(cause);
-          } else {
-            super.init(state, cause);
+          switch(state) {
+            case ALIVE:
+              alive();
+              break;
+            case COMPLETED:
+              completed();
+              break;
+            case ERROR:
+              error(cause);
+              break;
+            default:
+              super.init(state, cause);
           }
         }
 
         @Override
         public void alive() {
           // Get start time from RunId
-          long startTimeInSeconds = RunIds.getTime(runId, TimeUnit.SECONDS);
-          if (startTimeInSeconds == -1) {
+          long startTime = TimeUnit.SECONDS.toMillis(RunIds.getTime(RunIds.fromString(programRunId.getRun()),
+                                                                    TimeUnit.SECONDS));
+          if (startTime == -1) {
             // If RunId is not time-based, use current time as start time
-            startTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+            startTime = System.currentTimeMillis();
           }
-          programStateWriter.running(startTimeInSeconds);
+          programStateWriter.running(programRunId, twillRunId, startTime);
         }
 
         @Override
         public void completed() {
-          LOG.debug("Program {} completed successfully.", programId);
-          long endTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-          programStateWriter.stop(endTimeInSeconds, State.COMPLETED.getRunStatus(), null);
+          LOG.debug("Program {} completed successfully.", programRunId);
+          programStateWriter.stop(programRunId, System.currentTimeMillis(), State.COMPLETED.getRunStatus(), null);
         }
 
         @Override
         public void killed() {
-          LOG.debug("Program {} killed.", programId);
-          long endTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-          programStateWriter.stop(endTimeInSeconds, State.KILLED.getRunStatus(), null);
+          LOG.debug("Program {} killed.", programRunId);
+          programStateWriter.stop(programRunId, System.currentTimeMillis(), State.KILLED.getRunStatus(), null);
         }
 
         @Override
         public void suspended() {
-          LOG.debug("Suspending Program {} with run id {}.", programId, runId.getId());
-          programStateWriter.suspend();
+          LOG.debug("Suspending Program {} .", programRunId);
+          programStateWriter.suspend(programRunId);
         }
 
         @Override
         public void resuming() {
-          LOG.debug("Resuming Program {} with run id {}.", programId, runId.getId());
-          programStateWriter.resume();
+          LOG.debug("Resuming Program {}.", programRunId);
+          programStateWriter.resume(programRunId);
         }
 
         @Override
         public void error(final Throwable cause) {
-          LOG.info("Program stopped with error {}, {}: {}", programId, runId, cause);
-          long endTimeInSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-          programStateWriter.stop(endTimeInSeconds, State.ERROR.getRunStatus(), new BasicThrowable(cause));
+          LOG.info("Program {} stopped with error: {}", programRunId, cause);
+          programStateWriter.stop(programRunId, System.currentTimeMillis(), State.ERROR.getRunStatus(),
+                                  new BasicThrowable(cause));
         }
       },
       Threads.SAME_THREAD_EXECUTOR

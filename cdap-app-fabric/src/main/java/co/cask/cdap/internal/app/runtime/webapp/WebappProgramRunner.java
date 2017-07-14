@@ -30,7 +30,7 @@ import co.cask.cdap.common.io.Locations;
 import co.cask.cdap.common.utils.Networks;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.ProgramRunners;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
 import co.cask.http.NettyHttpService;
@@ -127,10 +127,9 @@ public class WebappProgramRunner implements ProgramRunner {
         cancellables.add(discoveryService.register(ResolvingDiscoverable.of(new Discoverable(sname, address))));
       }
 
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(program.getId(), runId, twillRunId,
-                                  options.getUserArguments(), options.getArguments(), runtimeStore);
-      return new WebappProgramController(program.getId(), runId, programStateWriter,
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
+      return new WebappProgramController(program.getId().run(runId), twillRunId, programStateWriter,
                                          httpService, new Cancellable() {
         @Override
         public void cancel() {

@@ -35,8 +35,8 @@ final class MapReduceProgramController extends ProgramControllerServiceAdapter i
   private final BasicMapReduceContext context;
 
   MapReduceProgramController(Service mapReduceRuntimeService, BasicMapReduceContext context,
-                             ProgramStateWriter programStateWriter) {
-    super(mapReduceRuntimeService, context.getProgram().getId(), context.getRunId(), programStateWriter);
+                             String twillRunId, ProgramStateWriter programStateWriter) {
+    super(mapReduceRuntimeService, context.getProgramRunId(), twillRunId, programStateWriter);
     this.context = context;
   }
 
