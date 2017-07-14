@@ -21,6 +21,7 @@ Plugin Reference
     Shared Plugins <shared-plugins/index>
     Post-run Plugins <post-run-plugins/index>
 
+.. toctree::
     :hidden:
     Plugins <plugins>
 

@@ -21,6 +21,7 @@ CDAP Pipelines
     Plugin Management <plugin-management>
     Plugin Reference <plugins/index>
 
+.. toctree::
     :hidden:
     Plugins <plugins>
 
