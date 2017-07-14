@@ -190,9 +190,7 @@ class ScheduleNotificationSubscriberService extends AbstractNotificationSubscrib
 
       String programIdString = notification.getProperties().get(ProgramOptionConstants.PROGRAM_ID);
       String programRunId = notification.getProperties().get(ProgramOptionConstants.RUN_ID);
-      String userOverridesString = notification.getProperties().get(ProgramOptionConstants.USER_OVERRIDES);
       String programStatusString = notification.getProperties().get(ProgramOptionConstants.PROGRAM_STATUS);
-      String workflowTokenString = notification.getProperties().get(ProgramOptionConstants.WORKFLOW_TOKEN);
 
       ProgramStatus programStatus = null;
       try {
@@ -212,21 +210,7 @@ class ScheduleNotificationSubscriberService extends AbstractNotificationSubscrib
 
       for (ProgramScheduleRecord schedule : getSchedules(context, triggerKeyForProgramStatus)) {
         if (schedule.getMeta().getStatus() == ProgramScheduleStatus.SCHEDULED) {
-          // If the triggered program is a workflow, send the notification that contains the workflow token to be used
-          if (schedule.getSchedule().getProgramId().getType() == ProgramType.WORKFLOW &&
-              programId.getType() == ProgramType.WORKFLOW) {
-            // Add workflow token if triggering program was a Workflow
-            Map<String, String> properties = new HashMap<>();
-            properties.put(ProgramOptionConstants.USER_OVERRIDES, userOverridesString);
-            Map<String, String> workflowInfo = new HashMap<>();
-            workflowInfo.put(ProgramOptionConstants.WORKFLOW_TOKEN, workflowTokenString);
-            properties.put(ProgramOptionConstants.SYSTEM_OVERRIDES, GSON.toJson(workflowInfo, STRING_STRING_MAP));
-            Notification workflowNotification = new Notification(Notification.Type.PROGRAM_STATUS, properties);
-            jobQueue.addNotification(schedule, workflowNotification);
-          } else {
-            // Send the original notification
-            jobQueue.addNotification(schedule, notification);
-          }
+          jobQueue.addNotification(schedule, notification);
         }
       }
     }

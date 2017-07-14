@@ -28,10 +28,12 @@ import co.cask.cdap.api.dataset.lib.CloseableIterator;
 import co.cask.cdap.api.dataset.lib.PartitionKey;
 import co.cask.cdap.api.workflow.Value;
 import co.cask.cdap.api.workflow.WorkflowToken;
+import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.AlreadyExistsException;
 import co.cask.cdap.common.ConflictException;
 import co.cask.cdap.common.NotFoundException;
+import co.cask.cdap.common.app.RunIds;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.utils.Tasks;
@@ -40,6 +42,8 @@ import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.dataset2.DynamicDatasetCache;
 import co.cask.cdap.data2.dataset2.MultiThreadDatasetCache;
 import co.cask.cdap.data2.transaction.Transactions;
+import co.cask.cdap.internal.app.program.ProgramEventPublisher;
+import co.cask.cdap.internal.app.runtime.BasicArguments;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramSchedule;
 import co.cask.cdap.internal.app.runtime.schedule.ProgramScheduleStatus;
@@ -97,6 +101,7 @@ import javax.annotation.Nullable;
 
 public class CoreSchedulerServiceTest extends AppFabricTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(CoreSchedulerServiceTest.class);
+  private static final Map<String, String> EMPTY_STRING_MAP = ImmutableMap.of();
 
   private static final NamespaceId NS_ID = new NamespaceId("schedtest");
   private static final ApplicationId APP1_ID = NS_ID.app("app1");
@@ -136,6 +141,7 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
 
   private static Scheduler scheduler;
   private static Transactional transactional;
+  private static ProgramStateWriter programStateWriter;
 
   @BeforeClass
   public static void beforeClass() throws Throwable {
@@ -338,6 +344,8 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     Assert.assertEquals(runs2, getRuns(WORKFLOW_2));
 
     // enable partition schedule 2
+    // Disable it because it is used in another test
+    disableSchedule(AppWithFrequentScheduledWorkflows.TEN_SECOND_SCHEDULE_1);
     enableSchedule(AppWithFrequentScheduledWorkflows.DATASET_PARTITION_SCHEDULE_2);
     testScheduleUpdate("disable");
     testScheduleUpdate("update");
@@ -356,7 +364,24 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     ScheduleId scheduleId = APP_ID.schedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
     ProgramSchedule schedule = scheduler.getSchedule(scheduleId);
 
-    // TODO add ProgramEventPublisher switch cConfiguration to switch to ProgramEventSubscriberThread
+    CConfiguration cConf = CConfiguration.create();
+    // Override the topic so that sending notifications from the program controllers go directly to the scheduler
+    // instead of through the ProgramStatusPersistService
+    cConf.set(Constants.AppFabric.PROGRAM_STATUS_EVENT_TOPIC,
+              cConf.get(Constants.Scheduler.PROGRAM_STATUS_EVENT_TOPIC));
+    programStateWriter = new ProgramEventPublisher(SCHEDULED_WORKFLOW_1, RunIds.generate(), null,
+                                                   new BasicArguments(EMPTY_STRING_MAP),
+                                                   new BasicArguments(EMPTY_STRING_MAP), null,
+                                                   cConf, messagingService);
+
+    long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+
+    // These notifications should not trigger the program
+    long lastProcessed = System.currentTimeMillis();
+    programStateWriter.stop(nowSec, ProgramRunStatus.COMPLETED, null);
+    programStateWriter.stop(nowSec, ProgramRunStatus.KILLED, null);
+    waitUntilProcessed(programEventTopic, lastProcessed);
+    Assert.assertEquals(0, getRuns(SCHEDULED_WORKFLOW_3));
 
     // Update the schedule so that the scheduled workflow is triggered regardless of failure or success.
     ProgramSchedule updatedSchedule = new ProgramSchedule(schedule.getName(), schedule.getDescription(),
@@ -366,23 +391,32 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
                                                                                    ProgramStatus.FAILED,
                                                                                    ProgramStatus.KILLED),
                                                           schedule.getConstraints());
-    Assert.assertEquals(0, getRuns(SCHEDULED_WORKFLOW_3));
     scheduler.updateSchedule(updatedSchedule);
 
-    // This schedule depends on the TEN_SECOND_SCHEDULE, this must be enabled too
-    long now = System.currentTimeMillis();
     enableSchedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
-    waitUntilProcessed(programEventTopic, now);
+
+    lastProcessed = System.currentTimeMillis();
+    programStateWriter.stop(nowSec, ProgramRunStatus.KILLED, null);
+    waitUntilProcessed(programEventTopic, lastProcessed);
     waitForCompleteRuns(1, SCHEDULED_WORKFLOW_3);
 
-    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
-    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
-    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
+    lastProcessed = System.currentTimeMillis();
+    programStateWriter.stop(nowSec, ProgramRunStatus.COMPLETED, null);
+    waitUntilProcessed(programEventTopic, lastProcessed);
+    waitForCompleteRuns(2, SCHEDULED_WORKFLOW_3);
 
-    disableSchedule(AppWithFrequentScheduledWorkflows.PROGRAM_STATUS_SCHEDULE);
+    // Test the entire flow by enabling another workflow, which writes to the workflow token
+    enableSchedule(AppWithFrequentScheduledWorkflows.TEN_SECOND_SCHEDULE_1);
+    lastProcessed = System.currentTimeMillis();
+    waitUntilProcessed(programEventTopic, lastProcessed);
+    waitForCompleteRuns(3, SCHEDULED_WORKFLOW_3);
 
-    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
-                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
+//    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
+//    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
+//    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
+//
+//    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
+//                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
   }
 
   private void testScheduleUpdate(String howToUpdate) throws Exception {
