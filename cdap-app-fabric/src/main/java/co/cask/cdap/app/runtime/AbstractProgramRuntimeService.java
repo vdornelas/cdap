@@ -37,7 +37,7 @@ import co.cask.cdap.internal.app.runtime.artifact.ArtifactDetail;
 import co.cask.cdap.internal.app.runtime.artifact.ArtifactRepository;
 import co.cask.cdap.internal.app.runtime.artifact.Artifacts;
 import co.cask.cdap.internal.app.runtime.service.SimpleRuntimeInfo;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.ProgramType;
@@ -71,7 +71,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -112,11 +111,8 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
 
     ProgramRunner runner = programRunnerFactory.create(programId.getType());
     RunId runId = RunIds.generate();
-    Arguments userArguments = options.getUserArguments();
-    Arguments systemArguments = options.getArguments();
-    String twillRunId = systemArguments.getOption(ProgramOptionConstants.TWILL_RUN_ID);
-    ProgramStateWriter programStateWriter = new ProgramStorePublisher(programId, runId, twillRunId,
-                                                                      userArguments, systemArguments, runtimeStore);
+    ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+      .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
     File tempDir = createTempDirectory(programId, runId);
     Runnable cleanUpTask = createCleanupTask(tempDir, runner);
     try {
@@ -134,7 +130,8 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       cleanUpTask = createCleanupTask(cleanUpTask, executableProgram);
 
       // Publish the program's starting state
-      programStateWriter.start(System.currentTimeMillis());
+      String twillRunId = options.getArguments().getOption(ProgramOptionConstants.TWILL_RUN_ID);
+      programStateWriter.start(programId.run(runId), twillRunId, System.currentTimeMillis());
 
       ProgramController controller = runner.run(executableProgram, optionsWithPlugins);
       RuntimeInfo runtimeInfo = createRuntimeInfo(controller, programId);
@@ -142,8 +139,8 @@ public abstract class AbstractProgramRuntimeService extends AbstractIdleService 
       return runtimeInfo;
     } catch (Exception e) {
       // Set the program state to an error when an exception is thrown
-      long nowSec = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-      programStateWriter.stop(nowSec, ProgramRunStatus.FAILED, new BasicThrowable(new Throwable(e.getMessage())));
+      programStateWriter.stop(programId.run(runId), System.currentTimeMillis(), ProgramRunStatus.FAILED,
+                              new BasicThrowable(new Throwable(e.getMessage())));
       cleanUpTask.run();
       LOG.error("Exception while trying to run program", e);
       throw Throwables.propagate(e);

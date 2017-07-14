@@ -18,35 +18,44 @@ package co.cask.cdap.app.runtime;
 
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
+import co.cask.cdap.proto.id.ProgramRunId;
 
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
  * A no-op {@link ProgramStateWriter}
  */
 public final class NoOpProgramStateWriter implements ProgramStateWriter {
-  @Override
-  public void start(long startTime) {
 
+  @Override
+  public void start(ProgramRunId programRunId, String twillRunId, long startTime) {
+    // no-op
   }
 
   @Override
-  public void running(long startTimeInSeconds) {
-
+  public void running(ProgramRunId programRunId, String twillRunId, long startTime) {
+    // no-op
   }
 
   @Override
-  public void stop(long endTime, ProgramRunStatus runStatus, @Nullable BasicThrowable cause) {
-
+  public void stop(ProgramRunId programRunId, long endTime, ProgramRunStatus runStatus,
+                   @Nullable BasicThrowable cause) {
+    // no-op
   }
 
   @Override
-  public void suspend() {
-
+  public void suspend(ProgramRunId programRunId) {
+    // no-op
   }
 
   @Override
-  public void resume() {
+  public void resume(ProgramRunId programRunId) {
+    // no-op
+  }
 
+  @Override
+  public ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments) {
+    return this;
   }
 }

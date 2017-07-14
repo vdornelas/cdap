@@ -38,10 +38,11 @@ import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.artifact.DefaultArtifactManager;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
 import co.cask.cdap.internal.app.services.ServiceHttpServer;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Closeables;
 import com.google.common.util.concurrent.Service;
@@ -140,11 +141,10 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
         }
       }, Threads.SAME_THREAD_EXECUTOR);
 
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(program.getId(), runId, twillRunId,
-                                  options.getUserArguments(), options.getArguments(), runtimeStore);
-      ProgramController controller = new ServiceProgramControllerAdapter(component, program.getId(), runId,
-                                                                         programStateWriter,
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
+      ProgramController controller = new ServiceProgramControllerAdapter(component, program.getId().run(runId),
+                                                                         twillRunId, programStateWriter,
                                                                          spec.getName() + "-" + instanceId);
       component.start();
       return controller;
@@ -157,9 +157,9 @@ public class ServiceProgramRunner extends AbstractProgramRunnerWithPlugin {
   private static final class ServiceProgramControllerAdapter extends ProgramControllerServiceAdapter {
     private final ServiceHttpServer service;
 
-    ServiceProgramControllerAdapter(ServiceHttpServer service, ProgramId programId, RunId runId,
+    ServiceProgramControllerAdapter(ServiceHttpServer service, ProgramRunId programRunId, String twillRunId,
                                     ProgramStateWriter programStateWriter, String componentName) {
-      super(service, programId, runId, programStateWriter, componentName);
+      super(service, programRunId, twillRunId, programStateWriter, componentName);
       this.service = service;
     }
 

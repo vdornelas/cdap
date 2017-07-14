@@ -21,10 +21,9 @@ import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.logging.Loggers;
 import co.cask.cdap.internal.app.program.AbstractStateChangeProgramController;
-import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.Service;
-import org.apache.twill.api.RunId;
 import org.apache.twill.common.Threads;
 import org.apache.twill.internal.ServiceListenerAdapter;
 import org.slf4j.Logger;
@@ -49,15 +48,15 @@ public class ProgramControllerServiceAdapter extends AbstractStateChangeProgramC
   private final Service service;
   private final CountDownLatch serviceStoppedLatch;
 
-  public ProgramControllerServiceAdapter(Service service, ProgramId programId, RunId runId,
+  public ProgramControllerServiceAdapter(Service service, ProgramRunId programRunId, String twillRunId,
                                          ProgramStateWriter programStateWriter) {
-    this(service, programId, runId, programStateWriter, null);
+    this(service, programRunId, twillRunId, programStateWriter, null);
   }
 
-  public ProgramControllerServiceAdapter(Service service, ProgramId programId, RunId runId,
+  public ProgramControllerServiceAdapter(Service service, ProgramRunId programRunId, String twillRunId,
                                          ProgramStateWriter programStateWriter,
                                          @Nullable String componentName) {
-    super(service, programId, runId, programStateWriter, componentName);
+    super(service, programRunId, twillRunId, programStateWriter, componentName);
     this.service = service;
     this.serviceStoppedLatch = new CountDownLatch(1);
     listenToRuntimeState(service);

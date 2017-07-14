@@ -18,7 +18,9 @@ package co.cask.cdap.app.runtime;
 
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
+import co.cask.cdap.proto.id.ProgramRunId;
 
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -32,7 +34,7 @@ public interface ProgramStateWriter {
    * @param startTime the start time of the program in milliseconds when it has reached
    *                  {@link ProgramRunStatus#STARTING}
    */
-  void start(long startTime);
+  void start(ProgramRunId programRunId, String twillRunId, long startTime);
 
   /**
    * Updates the program run's status to be {@link ProgramRunStatus#RUNNING} at the given start time in seconds
@@ -40,7 +42,7 @@ public interface ProgramStateWriter {
    * @param startTimeInSeconds the start time of the program in seconds when it has reached
    *                           {@link ProgramRunStatus#RUNNING}
    */
-  void running(long startTimeInSeconds);
+  void running(ProgramRunId programRunId, String twillRunId, long startTime);
 
   /**
    * Updates the program run's status to be terminated at the given time with the given run status
@@ -49,15 +51,25 @@ public interface ProgramStateWriter {
    * @param runStatus the final run status of the program
    * @param cause the reason for the program run's failure, if the program terminated with an error
    */
-  void stop(long endTimeInSeconds, ProgramRunStatus runStatus, @Nullable BasicThrowable cause);
+  void stop(ProgramRunId programRunId, long endTime,
+            ProgramRunStatus runStatus, @Nullable BasicThrowable cause);
 
   /**
    * Updates the program run's status to be suspended
    */
-  void suspend();
+  void suspend(ProgramRunId programRunId);
 
   /**
    * Updates the program run's status to be resumed
    */
-  void resume();
+  void resume(ProgramRunId programRunId);
+
+  /**
+   * Updates the user and system arguments to be written with the program
+   *
+   * @param userArguments the user arguments of the program
+   * @param systemArguments the system arguments of the program
+   * @return a {@link ProgramStateWriter} object
+   */
+  ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments);
 }

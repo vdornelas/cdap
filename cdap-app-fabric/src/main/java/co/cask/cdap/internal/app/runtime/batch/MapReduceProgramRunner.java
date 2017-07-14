@@ -46,7 +46,7 @@ import co.cask.cdap.internal.app.runtime.ProgramRunners;
 import co.cask.cdap.internal.app.runtime.plugin.PluginInstantiator;
 import co.cask.cdap.internal.app.runtime.workflow.NameMappedDatasetFramework;
 import co.cask.cdap.internal.app.runtime.workflow.WorkflowProgramInfo;
-import co.cask.cdap.internal.app.store.ProgramStorePublisher;
+import co.cask.cdap.internal.app.store.DirectStoreProgramStateWriter;
 import co.cask.cdap.internal.lang.Reflections;
 import co.cask.cdap.messaging.MessagingService;
 import co.cask.cdap.proto.ProgramType;
@@ -202,11 +202,10 @@ public class MapReduceProgramRunner extends AbstractProgramRunnerWithPlugin {
 
       mapReduceRuntimeService.addListener(createRuntimeServiceListener(closeables), Threads.SAME_THREAD_EXECUTOR);
 
-      ProgramStateWriter programStateWriter =
-        new ProgramStorePublisher(program.getId(), runId, twillRunId,
-                                  options.getUserArguments(), options.getArguments(), runtimeStore);
+      ProgramStateWriter programStateWriter = new DirectStoreProgramStateWriter(runtimeStore)
+        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
       ProgramController controller = new MapReduceProgramController(mapReduceRuntimeService, context,
-                                                                    programStateWriter);
+                                                                    twillRunId, programStateWriter);
 
       LOG.debug("Starting MapReduce Job: {}", context);
       // if security is not enabled, start the job as the user we're using to access hdfs with.

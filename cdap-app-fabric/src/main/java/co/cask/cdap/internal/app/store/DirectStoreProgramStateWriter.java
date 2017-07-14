@@ -16,7 +16,6 @@
 
 package co.cask.cdap.internal.app.store;
 
-import co.cask.cdap.app.runtime.Arguments;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.RuntimeStore;
 import co.cask.cdap.common.conf.Constants;
@@ -24,89 +23,88 @@ import co.cask.cdap.common.service.Retries;
 import co.cask.cdap.common.service.RetryStrategies;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
-import co.cask.cdap.proto.id.ProgramId;
+import co.cask.cdap.proto.id.ProgramRunId;
 import com.google.common.base.Supplier;
-import org.apache.twill.api.RunId;
+import com.google.common.collect.ImmutableMap;
 
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
  * An implementation of the ProgramStateWriter that persists directly to the store
  */
-public final class ProgramStorePublisher implements ProgramStateWriter {
+public final class DirectStoreProgramStateWriter implements ProgramStateWriter {
   private final RuntimeStore store;
-  private final ProgramId programId;
-  private final RunId runId;
-  private final String twillRunId;
-  private final Arguments userArguments;
-  private final Arguments systemArguments;
+  private Map<String, String> userArguments = ImmutableMap.of();
+  private Map<String, String> systemArguments = ImmutableMap.of();
 
-  public ProgramStorePublisher(ProgramId programId, RunId runId, String twillRunId,
-                               Arguments userArguments, Arguments systemArguments, RuntimeStore store) {
-    this.programId = programId;
-    this.runId = runId;
-    this.twillRunId = twillRunId;
-    this.userArguments = userArguments;
-    this.systemArguments = systemArguments;
+  public DirectStoreProgramStateWriter(RuntimeStore store) {
     this.store = store;
   }
 
   @Override
-  public void start(final long startTime) {
+  public void start(final ProgramRunId programRunId, final String twillRunId, final long startTime) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
-        store.setInit(programId, runId.getId(), TimeUnit.MILLISECONDS.toSeconds(startTime), twillRunId,
-                      userArguments.asMap(), systemArguments.asMap());
+        store.setInit(programRunId.getParent(), programRunId.getRun(), TimeUnit.MILLISECONDS.toSeconds(startTime),
+                      twillRunId, userArguments, systemArguments);
         return null;
       }
     }, RetryStrategies.fixDelay(Constants.Retry.RUN_RECORD_UPDATE_RETRY_DELAY_SECS, TimeUnit.SECONDS));
   }
 
   @Override
-  public void running(final long startTimeInSeconds) {
+  public void running(final ProgramRunId programRunId, final String twillRunId, final long startTime) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
-        store.setStart(programId, runId.getId(), startTimeInSeconds, twillRunId,
-                       userArguments.asMap(), systemArguments.asMap());
+        store.setStart(programRunId.getParent(), programRunId.getRun(), TimeUnit.MILLISECONDS.toSeconds(startTime),
+                       twillRunId, userArguments, systemArguments);
         return null;
       }
     }, RetryStrategies.fixDelay(Constants.Retry.RUN_RECORD_UPDATE_RETRY_DELAY_SECS, TimeUnit.SECONDS));
   }
 
   @Override
-  public void stop(final long endTimeInSeconds, final ProgramRunStatus runStatus,
+  public void stop(final ProgramRunId programRunId, final long endTime, final ProgramRunStatus runStatus,
                    final @Nullable BasicThrowable cause) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
-        store.setStop(programId, runId.getId(), endTimeInSeconds, runStatus, cause);
+        store.setStop(programRunId.getParent(), programRunId.getRun(), TimeUnit.MILLISECONDS.toSeconds(endTime),
+                      runStatus, cause);
         return null;
       }
     }, RetryStrategies.fixDelay(Constants.Retry.RUN_RECORD_UPDATE_RETRY_DELAY_SECS, TimeUnit.SECONDS));
   }
 
   @Override
-  public void suspend() {
+  public void suspend(final ProgramRunId programRunId) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
-        store.setSuspend(programId, runId.getId());
+        store.setSuspend(programRunId.getParent(), programRunId.getRun());
         return null;
       }
     }, RetryStrategies.fixDelay(Constants.Retry.RUN_RECORD_UPDATE_RETRY_DELAY_SECS, TimeUnit.SECONDS));
   }
 
   @Override
-  public void resume() {
+  public void resume(final ProgramRunId programRunId) {
     Retries.supplyWithRetries(new Supplier<Void>() {
       @Override
       public Void get() {
-        store.setResume(programId, runId.getId());
+        store.setResume(programRunId.getParent(), programRunId.getRun());
         return null;
       }
     }, RetryStrategies.fixDelay(Constants.Retry.RUN_RECORD_UPDATE_RETRY_DELAY_SECS, TimeUnit.SECONDS));
+  }
+
+  public ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments) {
+    this.userArguments = ImmutableMap.copyOf(userArguments);
+    this.systemArguments = ImmutableMap.copyOf(systemArguments);
+    return this;
   }
 }
