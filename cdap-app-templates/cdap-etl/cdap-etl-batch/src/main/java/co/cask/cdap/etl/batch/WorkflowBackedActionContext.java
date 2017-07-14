@@ -38,7 +38,7 @@ public class WorkflowBackedActionContext extends AbstractBatchContext implements
                                      Metrics metrics,
                                      StageSpec stageSpec,
                                      BasicArguments arguments) {
-    super(workflowContext, metrics, new DatasetContextLookupProvider(workflowContext),
+    super(workflowContext, metrics, new DatasetContextLookupProvider(workflowContext, workflowContext.getAdmin()),
           workflowContext.getLogicalStartTime(), workflowContext.getAdmin(), stageSpec, arguments);
     this.workflowContext = workflowContext;
   }

@@ -226,7 +226,7 @@ public class ETLWorker extends AbstractWorker {
     source = context.newPluginInstance(sourceName);
     source = new LoggedRealtimeSource<>(sourceName, source);
     WorkerRealtimeContext sourceContext = new WorkerRealtimeContext(
-      context, metrics, new TxLookupProvider(context), pipeline.getStage(sourceName));
+      context, metrics, new TxLookupProvider(context, context.getAdmin()), pipeline.getStage(sourceName));
     sourceStageName = sourceName;
     LOG.debug("Source Class : {}", source.getClass().getName());
     source.initialize(sourceContext);
@@ -243,7 +243,7 @@ public class ETLWorker extends AbstractWorker {
       RealtimeSink sink = context.newPluginInstance(sinkName);
       sink = new LoggedRealtimeSink(sinkName, sink);
       WorkerRealtimeContext sinkContext = new WorkerRealtimeContext(
-        context, metrics, new TxLookupProvider(context), sinkInfo);
+        context, metrics, new TxLookupProvider(context, context.getAdmin()), sinkInfo);
       LOG.debug("Sink Class : {}", sink.getClass().getName());
       sink.initialize(sinkContext);
       sink = new TrackedRealtimeSink(sink, new DefaultStageMetrics(metrics, sinkName));
@@ -279,7 +279,7 @@ public class ETLWorker extends AbstractWorker {
         Transform<?, ?> transform = context.newPluginInstance(transformName);;
         transform = new WrappedTransform<>(transform, Caller.DEFAULT);
         WorkerRealtimeContext transformContext = new WorkerRealtimeContext(
-          context, metrics, new TxLookupProvider(context), transformInfo);
+          context, metrics, new TxLookupProvider(context, context.getAdmin()), transformInfo);
         LOG.debug("Transform Class : {}", transform.getClass().getName());
         transform.initialize(transformContext);
         StageMetrics stageMetrics = new DefaultStageMetrics(metrics, transformName);

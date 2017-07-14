@@ -34,7 +34,7 @@ public class SparkBatchSourceContext extends AbstractSparkBatchContext implement
 
   public SparkBatchSourceContext(SparkBatchSourceFactory sourceFactory, SparkClientContext sparkContext,
                                  StageSpec stageSpec) {
-    super(sparkContext, new DatasetContextLookupProvider(sparkContext), stageSpec);
+    super(sparkContext, new DatasetContextLookupProvider(sparkContext, sparkContext.getAdmin(), stageSpec);
     this.sourceFactory = sourceFactory;
     this.isPreviewEnabled = sparkContext.getDataTracer(stageSpec.getName()).isEnabled();
   }

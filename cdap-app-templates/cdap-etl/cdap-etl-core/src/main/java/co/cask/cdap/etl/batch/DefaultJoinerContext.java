@@ -35,13 +35,13 @@ public class DefaultJoinerContext extends AbstractBatchContext implements BatchJ
   private Class<?> joinInputRecordClass;
 
   public DefaultJoinerContext(MapReduceContext context, Metrics metrics, StageSpec stageSpec) {
-    super(context, metrics, new DatasetContextLookupProvider(context), context.getLogicalStartTime(),
+    super(context, metrics, new DatasetContextLookupProvider(context, context.getAdmin()), context.getLogicalStartTime(),
           context.getAdmin(), stageSpec, new BasicArguments(context));
     this.job = context.getHadoopJob();
   }
 
   public DefaultJoinerContext(SparkClientContext context, StageSpec stageSpec) {
-    super(context, context.getMetrics(), new DatasetContextLookupProvider(context),
+    super(context, context.getMetrics(), new DatasetContextLookupProvider(context, context.getAdmin()),
           context.getLogicalStartTime(), context.getAdmin(), stageSpec, new BasicArguments(context));
     this.job = null;
   }

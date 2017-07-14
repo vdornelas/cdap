@@ -90,7 +90,8 @@ public class MapReduceTransformExecutorFactory<T> extends TransformExecutorFacto
     if (stageRuntimeArgs == null) {
       stageRuntimeArgs = new HashMap<>();
     }
-    return new MapReduceRuntimeContext(taskContext, metrics, new DatasetContextLookupProvider(taskContext),
+    return new MapReduceRuntimeContext(taskContext, metrics,
+                                       new DatasetContextLookupProvider(taskContext, taskContext.getAdmin()),
                                        stageRuntimeArgs, stageInfo);
   }
 

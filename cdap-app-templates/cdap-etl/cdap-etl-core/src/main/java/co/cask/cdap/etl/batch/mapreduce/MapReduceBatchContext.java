@@ -51,8 +51,8 @@ public class MapReduceBatchContext extends AbstractBatchContext implements Batch
   private final Caller caller;
 
   public MapReduceBatchContext(MapReduceContext context, Metrics metrics, StageSpec stageSpec) {
-    super(context, metrics, new DatasetContextLookupProvider(context), context.getLogicalStartTime(),
-          context.getAdmin(), stageSpec, new BasicArguments(context));
+    super(context, metrics, new DatasetContextLookupProvider(context, context.getAdmin()),
+          context.getLogicalStartTime(), context.getAdmin(), stageSpec, new BasicArguments(context));
     this.mrContext = context;
     this.caller = NoStageLoggingCaller.wrap(Caller.DEFAULT);
     this.outputNames = new HashSet<>();
