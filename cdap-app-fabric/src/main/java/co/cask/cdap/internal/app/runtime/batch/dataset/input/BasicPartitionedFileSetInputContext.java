@@ -21,6 +21,8 @@ import co.cask.cdap.api.dataset.lib.PartitionKey;
 import co.cask.cdap.api.dataset.lib.partitioned.PartitionKeyCodec;
 import co.cask.cdap.data2.dataset2.lib.partitioned.PartitionedFileSetDataset;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -54,7 +56,7 @@ class BasicPartitionedFileSetInputContext extends BasicInputContext implements P
   private final boolean isCombineInputFormat;
   private final Configuration conf;
 
-  private final List<Path> inputPaths;
+  private final Supplier<Path[]> inputPaths;
   private List<PartitionKey> partitionKeys;
 
   // for caching in case of CombineFileInputFormat
@@ -65,13 +67,13 @@ class BasicPartitionedFileSetInputContext extends BasicInputContext implements P
     super(multiInputTaggedSplit.getName());
 
     InputSplit inputSplit = multiInputTaggedSplit.getInputSplit();
-    inputPaths = new ArrayList<>();
     if (inputSplit instanceof FileSplit) {
       isCombineInputFormat = false;
-      inputPaths.add(((FileSplit) inputSplit).getPath());
+      Path path = ((FileSplit) inputSplit).getPath();
+      inputPaths = Suppliers.ofInstance(new Path[] { path });
     } else if (inputSplit instanceof CombineFileSplit) {
       isCombineInputFormat = true;
-      Collections.addAll(inputPaths, ((CombineFileSplit) inputSplit).getPaths());
+      inputPaths = Suppliers.ofInstance(((CombineFileSplit) inputSplit).getPaths());
     } else {
       throw new IllegalArgumentException(String.format("Expected either a '%s' or a '%s', but got '%s'.",
                                                        FileSplit.class.getName(), CombineFileSplit.class.getName(),
@@ -89,27 +91,28 @@ class BasicPartitionedFileSetInputContext extends BasicInputContext implements P
     if (isCombineInputFormat) {
       // org.apache.hadoop.mapreduce.lib.input.CombineFileRecordReader sets this in its initNextRecordReader method
       String inputFileName = conf.get(MRJobConfig.MAP_INPUT_FILE);
+      Preconditions.checkNotNull(inputFileName);
       if (!inputFileName.equals(currentInputfileName)) {
-        Preconditions.checkNotNull(inputFileName);
         currentPartitionKey = getPartitionKey(URI.create(inputFileName));
         currentInputfileName = inputFileName;
       }
       return currentPartitionKey;
-    } else {
-      List<PartitionKey> inputPartitionKeys = getInputPartitionKeys();
-      if (inputPartitionKeys.size() != 1) {
-        throw new IllegalArgumentException(String.format("Expected only a single PartitionKey, but found: %s",
-                                                         inputPartitionKeys));
-      }
-      return inputPartitionKeys.get(0);
     }
+
+    // single split per mapper task
+    List<PartitionKey> inputPartitionKeys = getInputPartitionKeys();
+    if (inputPartitionKeys.size() != 1) {
+      throw new IllegalStateException(String.format("Expected a single PartitionKey, but found: %s",
+                                                    inputPartitionKeys));
+    }
+    return inputPartitionKeys.get(0);
   }
 
   @Override
   public List<PartitionKey> getInputPartitionKeys() {
     if (partitionKeys == null) {
-      partitionKeys = new ArrayList<>();
-      for (Path inputPath : inputPaths) {
+      partitionKeys = new ArrayList<>(inputPaths.get().length);
+      for (Path inputPath : inputPaths.get()) {
         partitionKeys.add(getPartitionKey(inputPath.toUri()));
       }
     }
