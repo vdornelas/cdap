@@ -55,10 +55,15 @@ export function setPopoverOffset(element, footer_height = 54) {
   let tableContainerScroll = document.getElementById('dataprep-table-id').scrollTop;
   let popoverMenuItemTop = elemBounding.top;
   let bodyBottom = document.body.getBoundingClientRect().bottom - FOOTER_HEIGHT;
+  let bodyTop = document.body.getBoundingClientRect().top;
 
   let diff = bodyBottom - (popoverMenuItemTop + popoverHeight) - tableContainerScroll;
 
   if (diff < 0) {
+    // this is to make sure the top doesn't go off screen
+    if (diff < -popoverMenuItemTop + bodyTop) {
+      diff = -popoverMenuItemTop + bodyTop;
+    }
     popover[0].style.top = `${diff}px`;
     // This is to align the bottom of second level popover menu with that of the main menu
     if (elemBounding.bottom > popover[0].getBoundingClientRect().bottom) {
@@ -95,4 +100,9 @@ export function checkDataPrepHigherVersion() {
         });
       }
     });
+}
+
+export function columnNameAlreadyExists(colName) {
+  let headers = DataPrepStore.getState().dataprep.headers;
+  return headers.indexOf(colName) !== -1;
 }
