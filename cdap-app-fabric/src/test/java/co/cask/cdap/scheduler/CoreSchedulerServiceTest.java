@@ -17,6 +17,7 @@
 package co.cask.cdap.scheduler;
 
 import co.cask.cdap.AppWithFrequentScheduledWorkflows;
+import co.cask.cdap.AppWithMultipleWorkflows;
 import co.cask.cdap.api.ProgramStatus;
 import co.cask.cdap.api.Transactional;
 import co.cask.cdap.api.Transactionals;
@@ -25,6 +26,8 @@ import co.cask.cdap.api.common.Bytes;
 import co.cask.cdap.api.data.DatasetContext;
 import co.cask.cdap.api.dataset.lib.CloseableIterator;
 import co.cask.cdap.api.dataset.lib.PartitionKey;
+import co.cask.cdap.api.workflow.Value;
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.AlreadyExistsException;
@@ -402,12 +405,12 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
     waitUntilProcessed(programEventTopic, lastProcessed);
     waitForCompleteRuns(3, SCHEDULED_WORKFLOW_3);
 
-//    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
-//    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
-//    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
-//
-//    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
-//                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
+    ProgramRunId latestRun = getLatestRun(SCHEDULED_WORKFLOW_3);
+    WorkflowId scheduledWorkflow = SCHEDULED_WORKFLOW_3.getParent().workflow(SCHEDULED_WORKFLOW_3.getProgram());
+    WorkflowToken runToken = store.getWorkflowToken(scheduledWorkflow, latestRun.getRun());
+
+    Assert.assertEquals(Value.of(AppWithMultipleWorkflows.DummyTokenAction.VALUE),
+                        runToken.get(AppWithMultipleWorkflows.DummyTokenAction.KEY));
   }
 
   private void testScheduleUpdate(String howToUpdate) throws Exception {
@@ -542,11 +545,7 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
   }
   
   private ProgramRunId getLatestRun(ProgramId workflowId) {
-    int numRuns = getRuns(workflowId);
-    if (numRuns == 0) {
-      return null;
-    }
-    return (ProgramRunId) getAllRuns(workflowId).toArray()[numRuns - 1];
+    return (ProgramRunId) getAllRuns(workflowId).toArray()[0];
   }
 
   private Set<ProgramRunId> getAllRuns(ProgramId workflowId) {
@@ -564,7 +563,7 @@ public class CoreSchedulerServiceTest extends AppFabricTestBase {
         MessageId messageId = getLastMessageId(topic);
         return messageId != null && messageId.getPublishTimestamp() >= minPublishTime;
       }
-    }, 5, TimeUnit.SECONDS);
+    }, 10, TimeUnit.SECONDS);
   }
 
   private List<Job> getAllJobs() {

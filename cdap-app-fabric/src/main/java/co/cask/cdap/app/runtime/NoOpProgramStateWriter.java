@@ -16,6 +16,7 @@
 
 package co.cask.cdap.app.runtime;
 
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.id.ProgramRunId;
@@ -56,6 +57,11 @@ public final class NoOpProgramStateWriter implements ProgramStateWriter {
 
   @Override
   public ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments) {
+    return this;
+  }
+
+  @Override
+  public ProgramStateWriter withWorkflowToken(WorkflowToken workflowToken) {
     return this;
   }
 }

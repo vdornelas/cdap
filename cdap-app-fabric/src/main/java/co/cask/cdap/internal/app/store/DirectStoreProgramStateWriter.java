@@ -16,6 +16,7 @@
 
 package co.cask.cdap.internal.app.store;
 
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.Constants;
@@ -106,5 +107,10 @@ public final class DirectStoreProgramStateWriter implements ProgramStateWriter {
     this.userArguments = ImmutableMap.copyOf(userArguments);
     this.systemArguments = ImmutableMap.copyOf(systemArguments);
     return this;
+  }
+
+  @Override
+  public ProgramStateWriter withWorkflowToken(WorkflowToken workflowToken) {
+    throw new UnsupportedOperationException("Cannot add workflow token to DirectStoreProgramStateWriter");
   }
 }

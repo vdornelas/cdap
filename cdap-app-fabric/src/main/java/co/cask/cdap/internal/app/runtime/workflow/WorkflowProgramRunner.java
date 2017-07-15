@@ -146,7 +146,8 @@ public class WorkflowProgramRunner extends AbstractProgramRunnerWithPlugin {
       // Controller needs to be created before starting the driver so that the state change of the driver
       // service can be fully captured by the controller.
       ProgramStateWriter programStateWriter = new MessagingProgramStateWriter(cConf, messagingService)
-        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap());
+        .withArguments(options.getUserArguments().asMap(), options.getArguments().asMap())
+        .withWorkflowToken(driver.getBasicWorkflowToken());
       ProgramController controller = new WorkflowProgramController(program.getId().run(runId), twillRunId,
                                                                    programStateWriter, driver, serviceAnnouncer);
       driver.start();

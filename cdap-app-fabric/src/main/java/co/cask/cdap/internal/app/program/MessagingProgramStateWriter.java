@@ -16,6 +16,7 @@
 
 package co.cask.cdap.internal.app.program;
 
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.app.runtime.ProgramStateWriter;
 import co.cask.cdap.common.conf.CConfiguration;
@@ -45,6 +46,7 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
   private static final Gson GSON = new Gson();
   private final MessagingService messagingService;
   private final TopicId topicId;
+  private WorkflowToken workflowToken;
   private Map<String, String> userArguments = ImmutableMap.of();
   private Map<String, String> systemArguments = ImmutableMap.of();
 
@@ -87,9 +89,9 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
     if (cause != null) {
       builder.put("error", GSON.toJson(cause));
     }
-//    if (workflowToken != null) {
-//      builder.put(ProgramOptionConstants.WORKFLOW_TOKEN, GSON.toJson(workflowToken));
-//    }
+    if (workflowToken != null) {
+      builder.put(ProgramOptionConstants.WORKFLOW_TOKEN, GSON.toJson(workflowToken));
+    }
     publish(programRunId, null, builder);
   }
 
@@ -131,6 +133,12 @@ public final class MessagingProgramStateWriter implements ProgramStateWriter {
   public ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments) {
     this.userArguments = ImmutableMap.copyOf(userArguments);
     this.systemArguments = ImmutableMap.copyOf(systemArguments);
+    return this;
+  }
+
+  @Override
+  public ProgramStateWriter withWorkflowToken(WorkflowToken workflowToken) {
+    this.workflowToken = workflowToken;
     return this;
   }
 }

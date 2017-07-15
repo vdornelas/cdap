@@ -16,6 +16,7 @@
 
 package co.cask.cdap.app.runtime;
 
+import co.cask.cdap.api.workflow.WorkflowToken;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.ProgramRunStatus;
 import co.cask.cdap.proto.id.ProgramRunId;
@@ -81,4 +82,12 @@ public interface ProgramStateWriter {
    * @return a {@link ProgramStateWriter} object
    */
   ProgramStateWriter withArguments(Map<String, String> userArguments, Map<String, String> systemArguments);
+
+  /**
+   * Updates the workflow token to be sent with the program status
+   *
+   * @param workflowToken the workflow token
+   * @return a {@link ProgramStateWriter} object
+   */
+  ProgramStateWriter withWorkflowToken(WorkflowToken workflowToken);
 }
