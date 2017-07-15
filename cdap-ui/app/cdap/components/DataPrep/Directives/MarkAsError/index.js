@@ -24,6 +24,7 @@ import {execute} from 'components/DataPrep/store/DataPrepActionCreator';
 import DataPrepStore from 'components/DataPrep/store';
 import DataPrepActions from 'components/DataPrep/store/DataPrepActions';
 import IconSVG from 'components/IconSVG';
+import MouseTrap from 'mousetrap';
 
 require('./MarkAsError.scss');
 
@@ -68,6 +69,7 @@ export default class MarkAsError extends Component {
   componentDidUpdate() {
     if (this.props.isOpen && this.calculateOffset) {
       this.calculateOffset();
+      MouseTrap.bind('enter', this.applyDirective);
     }
     if (this.state.selectedCondition.substr(0, 4) === 'TEXT' && this.state.conditionValue.length === 0 && this.conditionValueRef) {
       this.conditionValueRef.focus();
@@ -78,9 +80,11 @@ export default class MarkAsError extends Component {
 
   componentWillUnmount() {
     window.removeEventListener('resize', this.offsetCalcDebounce);
+    MouseTrap.unbind('enter');
   }
 
   applyDirective = () => {
+    MouseTrap.unbind('enter');
     execute([this.getDirectiveExpression()])
       .subscribe(() => {
         this.props.close();
@@ -314,13 +318,16 @@ export default class MarkAsError extends Component {
       return this.state.conditionValue.length === 0;
     }
 
-    if (this.state.selectedCondition.substr(0, 4) === 'CUSTOM') {
+    if (this.state.selectedCondition.substr(0, 6) === 'CUSTOM') {
       return this.state.customCondition.length === 0;
     }
   };
 
   renderDetail = () => {
-    if (!this.props.isOpen) { return null; }
+    if (!this.props.isOpen) {
+      MouseTrap.unbind('enter');
+      return null;
+    }
 
     return (
       <div
