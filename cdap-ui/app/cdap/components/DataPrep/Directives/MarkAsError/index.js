@@ -247,7 +247,7 @@ export default class MarkAsError extends Component {
       <div>
         <br />
         <textarea
-          className="form-control"
+          className="form-control custom-condition-input"
           value={this.state.customCondition}
           onChange={this.handleCustomFilterChange}
           ref={ref => this.customConditionRef = ref}
@@ -336,6 +336,10 @@ export default class MarkAsError extends Component {
       >
         {this.renderCondition()}
 
+        <div className="mark-as-error-tooltip">
+          <span>*</span>
+          <span>{T.translate(`${PREFIX}.tooltip`)}</span>
+        </div>
         <hr />
 
         <div className="action-buttons">

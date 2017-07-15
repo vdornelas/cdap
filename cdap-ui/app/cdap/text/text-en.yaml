@@ -590,6 +590,7 @@ features:
           TEXTREGEX: Enter regex
           TEXTSTARTSWITH: Enter prefix
         title: Send to Error
+        tooltip: When used in a pipeline, these errors can be collected by an error collector
       MaskData:
         menuLabel: Mask Data
         option1: Show last 4 characters only
