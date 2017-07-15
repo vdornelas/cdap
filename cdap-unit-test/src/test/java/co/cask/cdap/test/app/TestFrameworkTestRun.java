@@ -186,7 +186,9 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     ApplicationManager applicationManager = deployApplication(FilterAppWithNewFlowAPI.class);
     Map<String, String> args = Maps.newHashMap();
     args.put("threshold", "10");
-    applicationManager.getFlowManager("FilterFlow").start(args);
+    FlowManager flowManager = applicationManager.getFlowManager("FilterFlow");
+    flowManager.start(args);
+    flowManager.waitForRun(ProgramRunStatus.RUNNING, 10, TimeUnit.SECONDS);
 
     StreamManager input = getStreamManager("input");
     input.send("2");
@@ -197,6 +199,12 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
     Assert.assertEquals("1", new Gson().fromJson(
       callServiceGet(serviceManager.getServiceURL(), "result"), String.class));
+
+    flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
+
+    serviceManager.stop();
+    serviceManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
   }
 
   @Test
@@ -733,9 +741,8 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     }
 
     // Now the Workflow should have RUNNING status. Get its runid.
-    List<RunRecord> history = wfManager.getHistory(ProgramRunStatus.RUNNING);
-    Assert.assertEquals(1, history.size());
-    String runId = history.get(0).getPid();
+    wfManager.waitForRun(ProgramRunStatus.RUNNING, 10, TimeUnit.SECONDS);
+    String runId = wfManager.getHistory(ProgramRunStatus.RUNNING).get(0).getPid();
 
     // Get the local datasets for this Workflow run
     DataSetManager<KeyValueTable> localDataset =
@@ -754,7 +761,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     Assert.assertNull(fileSetDataset.get());
 
     // Verify that the workflow hasn't completed on its own before we signal it to
-    history = wfManager.getHistory(ProgramRunStatus.RUNNING);
+    List<RunRecord> history = wfManager.getHistory(ProgramRunStatus.RUNNING);
     Assert.assertEquals(1, history.size());
 
     // Signal the Workflow to continue

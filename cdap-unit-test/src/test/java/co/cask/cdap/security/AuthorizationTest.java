@@ -822,6 +822,7 @@ public class AuthorizationTest extends TestBase {
       CrossNsDatasetAccessApp.OUTPUT_DATASET_NAME, "store"
     );
 
+    int prevFlowRuns = flowManager.getHistory(ProgramRunStatus.KILLED).size();
     // But trying to run a flow as BOB will fail since this flow writes to a dataset in another namespace in which
     // is not accessible to BOB.
     flowManager.start(args);
@@ -837,6 +838,7 @@ public class AuthorizationTest extends TestBase {
     // another namespace. Since the failure will lead to no metrics being emitted we cannot actually check it tried
     // processing or not. So stop the flow and check that the output dataset is empty
     flowManager.stop();
+    flowManager.waitForRuns(ProgramRunStatus.KILLED, prevFlowRuns + 1, 10, TimeUnit.SECONDS);
     SecurityRequestContext.setUserId(ALICE.getName());
 
     assertDatasetIsEmpty(outputDatasetNS.getNamespaceId(), "store");
@@ -863,6 +865,7 @@ public class AuthorizationTest extends TestBase {
       Assert.assertArrayEquals(key, results.read(key));
     }
     flowManager.stop();
+    flowManager.waitForRun(ProgramRunStatus.KILLED, 10, TimeUnit.SECONDS);
     getNamespaceAdmin().delete(outputDatasetNS.getNamespaceId());
   }
 
@@ -1064,13 +1067,11 @@ public class AuthorizationTest extends TestBase {
     // wait for scheduled runs of workflow to run to end
     workflowManager.waitForStatus(false, 2 , 3);
 
-    // since the schedule in AppWithSchedule is to  run every second its possible that it will trigger more than one
+    // since the schedule in AppWithSchedule is to run every second its possible that it will trigger more than one
     // run before the schedule was suspended so check for greater than 0 rather than equal to 1
     Assert.assertTrue(0 < workflowManager.getHistory().size());
     // assert that all run completed
-    for (RunRecord runRecord : workflowManager.getHistory()) {
-      Assert.assertEquals(ProgramRunStatus.COMPLETED, runRecord.getStatus());
-    }
+    workflowManager.waitForRuns(ProgramRunStatus.COMPLETED, workflowManager.getHistory().size(), 15, TimeUnit.SECONDS);
 
     // switch to Alice
     SecurityRequestContext.setUserId(ALICE.getName());
