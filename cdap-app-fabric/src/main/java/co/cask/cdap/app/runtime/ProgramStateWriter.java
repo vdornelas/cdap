@@ -31,23 +31,28 @@ public interface ProgramStateWriter {
   /**
    * Updates the program run's status to be {@link ProgramRunStatus#STARTING} at the given start time
    *
+   * @param programRunId the id of the program run
+   * @param twillRunId the run id of the twill application
    * @param startTime the start time of the program in milliseconds when it has reached
    *                  {@link ProgramRunStatus#STARTING}
    */
-  void start(ProgramRunId programRunId, String twillRunId, long startTime);
+  void start(ProgramRunId programRunId, @Nullable String twillRunId, long startTime);
 
   /**
    * Updates the program run's status to be {@link ProgramRunStatus#RUNNING} at the given start time in seconds
    *
-   * @param startTimeInSeconds the start time of the program in seconds when it has reached
+   * @param programRunId the id of the program run
+   * @param twillRunId the run id of the twill application
+   * @param startTime the start time of the program in milliseconds when it has reached
    *                           {@link ProgramRunStatus#RUNNING}
    */
-  void running(ProgramRunId programRunId, String twillRunId, long startTime);
+  void running(ProgramRunId programRunId, @Nullable String twillRunId, long startTime);
 
   /**
    * Updates the program run's status to be terminated at the given time with the given run status
    *
-   * @param endTimeInSeconds the end time of the program when it has terminated
+   * @param programRunId the id of the program run
+   * @param endTime the end time of the program in milliseconds when it has terminated
    * @param runStatus the final run status of the program
    * @param cause the reason for the program run's failure, if the program terminated with an error
    */
@@ -56,11 +61,15 @@ public interface ProgramStateWriter {
 
   /**
    * Updates the program run's status to be suspended
+   *
+   * @param programRunId the id of the program run
    */
   void suspend(ProgramRunId programRunId);
 
   /**
    * Updates the program run's status to be resumed
+   *
+   * @param programRunId the id of the program run
    */
   void resume(ProgramRunId programRunId);
 
