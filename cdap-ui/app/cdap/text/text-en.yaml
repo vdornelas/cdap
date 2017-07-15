@@ -416,10 +416,14 @@ features:
       cancel: Cancel
       Calculate:
         createNewColumn: Create New Column
+        disabledTooltip: "Calculate directives can only be executed on columns of type 'string', 'integer', 'short', 'long', 'float', 'double'"
+        destinationColumnInputLabel: Name Destination Column
+        destinationColumnInputPlaceholder: Destination column name
         newColumnInputDuplicate: A column with the same name already exists. Pick a new name, or click “Apply” to overwrite.
         newColumnInputLabel: Name New Column
         newColumnInputPlaceholder: New column name
         newColumnInputSuffix: _copy
+        newColumnInputCountSuffix: _count
         Options:
           POWEROF:
             description: "Raise the column value to the power of:"
@@ -430,6 +434,7 @@ features:
           ARCSIN: Arcsin
           ARCTAN: Arctan
           CEIL: Ceil
+          CHARCOUNT: Character Count
           COS: Cos
           CUBE: Cube
           CUBEROOT: Cube root

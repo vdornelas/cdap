@@ -25,6 +25,7 @@ import {setPopoverOffset} from 'components/DataPrep/helper';
 import ScrollableList from 'components/ScrollableList';
 import IconSVG from 'components/IconSVG';
 import WarningContainer from 'components/WarningContainer';
+import {UncontrolledTooltip} from 'components/UncontrolledComponents';
 import {columnNameAlreadyExists} from 'components/DataPrep/helper';
 import {preventPropagation} from 'services/helpers';
 
@@ -36,11 +37,17 @@ export default class Calculate extends Component {
   constructor(props) {
     super(props);
 
+    let {types} = DataPrepStore.getState().dataprep;
+
+    this.NUMBER_TYPES = ['integer', 'short', 'long', 'float', 'double'];
+    this.VALID_TYPES = this.NUMBER_TYPES.concat(['string']);
+
     this.defaultState = {
       operationPopoverOpen: null,
       operationInput : 1,
       createNewColumn: false,
-      newColumnInput: this.props.column + T.translate(`${PREFIX}.newColumnInputSuffix`)
+      newColumnInput: this.props.column + T.translate(`${PREFIX}.newColumnInputSuffix`),
+      isDisabled: this.VALID_TYPES.indexOf(types[this.props.column]) === -1
     };
 
     this.state = Object.assign({}, this.defaultState);
@@ -52,7 +59,7 @@ export default class Calculate extends Component {
     this.toggleCreateNewColumn = this.toggleCreateNewColumn.bind(this);
     this.getExpressionAndApply = this.getExpressionAndApply.bind(this);
 
-    this.CALCULATE_OPTIONS = [
+    this.NUMERIC_CALCULATE_OPTIONS = [
       {
         name: 'ADD',
         onClick: this.popoverOptionClick.bind(this, 'ADD')
@@ -159,7 +166,14 @@ export default class Calculate extends Component {
       }
     ];
 
-    this.OPTIONS_WITH_POPOVER = ['ADD', 'SUBTRACT', 'MULTIPLY', 'DIVIDE', 'MODULO', 'POWEROF'];
+    this.STRING_CALCULATE_OPTIONS = [
+      {
+        name: 'CHARCOUNT',
+        onClick: this.popoverOptionClick.bind(this, 'CHARCOUNT')
+      }
+    ];
+
+    this.OPTIONS_WITH_POPOVER = ['ADD', 'SUBTRACT', 'MULTIPLY', 'DIVIDE', 'MODULO', 'POWEROF', 'CHARCOUNT'];
   }
 
   componentDidMount() {
@@ -173,13 +187,17 @@ export default class Calculate extends Component {
   }
 
   componentDidUpdate() {
-    if (this.props.isOpen && this.calculateOffset) {
+    if (this.props.isOpen && !this.state.isDisabled && this.calculateOffset) {
       this.calculateOffset();
     }
   }
 
   handleKeyPress(e) {
-    if (e.nativeEvent.keyCode === 13 && (!this.state.createNewColumn || (this.state.createNewColumn && this.state.newColumnInput.length > 0))) {
+    if (e.nativeEvent.keyCode === 13 && (
+        (!this.state.createNewColumn && this.state.operationPopoverOpen !== 'CHARCOUNT') ||
+        (this.state.createNewColumn && this.state.newColumnInput.length > 0) ||
+        (this.state.operationPopoverOpen === 'CHARCOUNT' && this.state.newColumnInput.length > 0)
+      )) {
       this.getExpressionAndApply();
     }
   }
@@ -214,8 +232,15 @@ export default class Calculate extends Component {
   popoverOptionClick(option) {
     let operationPopoverOpen = option === this.state.operationPopoverOpen ? null : option;
 
+    let newColumnInput = this.defaultState.newColumnInput;
+
+    if (option === 'CHARCOUNT') {
+      newColumnInput = this.props.column + T.translate(`${PREFIX}.newColumnInputCountSuffix`);
+    }
+
     let newState = Object.assign({}, this.defaultState, {
-      operationPopoverOpen
+      operationPopoverOpen,
+      newColumnInput
     });
 
     this.setState(newState);
@@ -243,6 +268,9 @@ export default class Calculate extends Component {
       case 'POWEROF':
         expression = `math:pow(${this.props.column}, ${this.state.operationInput})`;
         break;
+      case 'CHARCOUNT':
+        expression = `string:length(${this.props.column})`;
+        break;
     }
 
     this.applyDirective(expression);
@@ -250,7 +278,7 @@ export default class Calculate extends Component {
 
   applyDirective(expression) {
     let destinationColumn = this.props.column;
-    if (this.state.createNewColumn && this.state.newColumnInput.length > 0) {
+    if ((this.state.createNewColumn || this.state.operationPopoverOpen === 'CHARCOUNT') && this.state.newColumnInput.length > 0) {
       destinationColumn = this.state.newColumnInput;
     }
     let directive = `set-column ${destinationColumn} ${expression}`;
@@ -270,8 +298,92 @@ export default class Calculate extends Component {
     );
   }
 
+  renderNumericOptions() {
+    return (
+      <ScrollableList>
+        {
+          this.NUMERIC_CALCULATE_OPTIONS.map((option) => {
+            if (option.name === 'divider') {
+              return (
+                <div className="column-action-divider calculate-options-divider">
+                  <hr />
+                </div>
+              );
+            }
+            return (
+              <div
+                key={option.name}
+                className={classnames('option', {
+                  'active': this.state.operationPopoverOpen === option.name
+                })}
+                onClick={option.onClick}
+              >
+                <span>
+                  {T.translate(`${PREFIX}.OptionsLabels.${option.name}`)}
+                </span>
+                {
+                  this.OPTIONS_WITH_POPOVER.indexOf(option.name) !== -1 ?
+                    (
+                      <span className="float-xs-right">
+                        <span className="fa fa-caret-right" />
+                      </span>
+                    )
+                  : null
+                }
+                {
+                  this.state.operationPopoverOpen === option.name ?
+                    this.renderThirdLevelPopover()
+                  : null
+                }
+              </div>
+            );
+          })
+        }
+      </ScrollableList>
+    );
+  }
+
+  // Right now don't need to use ScrollableList since there's only one string option.
+  // If we have more options in the future then we can merge this and renderNumericOptions
+  // subce the only other difference is the options array
+  renderStringOptions() {
+    return (
+      this.STRING_CALCULATE_OPTIONS.map((option) => {
+        return (
+          <div
+            key={option.name}
+            className={classnames('option', {
+              'active': this.state.operationPopoverOpen === option.name
+            })}
+            onClick={option.onClick}
+          >
+            <span>
+              {T.translate(`${PREFIX}.OptionsLabels.${option.name}`)}
+            </span>
+            {
+              this.OPTIONS_WITH_POPOVER.indexOf(option.name) !== -1 ?
+                (
+                  <span className="float-xs-right">
+                    <span className="fa fa-caret-right" />
+                  </span>
+                )
+              : null
+            }
+            {
+              this.state.operationPopoverOpen === option.name ?
+                this.renderThirdLevelPopover()
+              : null
+            }
+          </div>
+        );
+      })
+    );
+  }
+
   renderDetail() {
-    if (!this.props.isOpen) { return null; }
+    if (!this.props.isOpen || this.state.isDisabled) { return null; }
+
+    let {types} = DataPrepStore.getState().dataprep;
 
     return (
       <div
@@ -279,69 +391,42 @@ export default class Calculate extends Component {
         onClick={preventPropagation}
       >
         <div className="calculate-options">
-          <ScrollableList>
-            {
-              this.CALCULATE_OPTIONS.map((option) => {
-                if (option.name === 'divider') {
-                  return (
-                    <div className="column-action-divider calculate-options-divider">
-                      <hr />
-                    </div>
-                  );
-                }
-                return (
-                  <div
-                    key={option.name}
-                    className={classnames('option', {
-                      'active': this.state.operationPopoverOpen === option.name
-                    })}
-                    onClick={option.onClick}
-                  >
-                    <span>
-                      {T.translate(`${PREFIX}.OptionsLabels.${option.name}`)}
-                    </span>
-                    {
-                      this.OPTIONS_WITH_POPOVER.indexOf(option.name) !== -1 ?
-                        (
-                          <span className="float-xs-right">
-                            <span className="fa fa-caret-right" />
-                          </span>
-                        )
-                      : null
-                    }
-                    {
-                      this.state.operationPopoverOpen === option.name ?
-                        this.renderThirdLevelPopover()
-                      : null
-                    }
-                  </div>
-                );
-              })
-            }
-          </ScrollableList>
+          {
+            this.NUMBER_TYPES.indexOf(types[this.props.column]) !== -1 ?
+              this.renderNumericOptions()
+            :
+              this.renderStringOptions()
+          }
         </div>
       </div>
     );
   }
 
   renderNewColumnNameInput() {
-    if (!this.state.createNewColumn) { return null; }
+    if (!this.state.createNewColumn && this.state.operationPopoverOpen !== 'CHARCOUNT') { return null; }
+
+    let inputLabel = T.translate(`${PREFIX}.newColumnInputLabel`);
+    let inputPlaceholder = T.translate(`${PREFIX}.newColumnInputPlaceholder`);
+
+    if (this.state.operationPopoverOpen === 'CHARCOUNT') {
+      inputLabel = T.translate(`${PREFIX}.destinationColumnInputLabel`);
+      inputPlaceholder = T.translate(`${PREFIX}.destinationColumnInputPlaceholder`);
+    }
 
     return (
       <div>
-        <div>{T.translate(`${PREFIX}.newColumnInputLabel`)}</div>
-        <div className="input">
-          <Input
-            type="text"
-            className="form-control"
-            value={this.state.newColumnInput}
-            onChange={this.setNewColumnInput}
-            onKeyPress={this.handleKeyPress}
-            placeholder={T.translate(`${PREFIX}.newColumnInputPlaceholder`)}
-            autoFocus
-          />
+        <div className={classnames({"bigger-new-column-label": this.state.operationPopoverOpen === 'CHARCOUNT'})}>
+          {inputLabel}
         </div>
-
+        <Input
+          type="text"
+          className="form-control"
+          value={this.state.newColumnInput}
+          onChange={this.setNewColumnInput}
+          onKeyPress={this.handleKeyPress}
+          placeholde={inputPlaceholder}
+          autoFocus
+        />
         {
           columnNameAlreadyExists(this.state.newColumnInput) ? (
             <WarningContainer
@@ -353,8 +438,44 @@ export default class Calculate extends Component {
     );
   }
 
+  renderActionButtons() {
+    return (
+      <div className="action-buttons">
+        <button
+          className="btn btn-primary float-xs-left"
+          disabled={(this.state.createNewColumn || this.state.operationPopoverOpen === 'CHARCOUNT') && this.state.newColumnInput.length === 0}
+          onClick={this.getExpressionAndApply}
+        >
+          {T.translate('features.DataPrep.Directives.apply')}
+        </button>
+
+        <button
+          className="btn btn-link float-xs-right"
+          onClick={this.setDefaultState}
+        >
+          {T.translate('features.DataPrep.Directives.cancel')}
+        </button>
+      </div>
+    );
+  }
+
   renderThirdLevelPopover() {
     if (!this.state.operationPopoverOpen) { return null; }
+
+    if (this.state.operationPopoverOpen === 'CHARCOUNT') {
+      return (
+        <div
+          className="third-level-popover"
+          onClick={preventPropagation}
+        >
+          {this.renderNewColumnNameInput()}
+
+          <hr />
+
+          {this.renderActionButtons()}
+        </div>
+      );
+    }
 
     let operationSign;
 
@@ -422,43 +543,43 @@ export default class Calculate extends Component {
 
         <hr />
 
-        <div className="action-buttons">
-          <button
-            className="btn btn-primary float-xs-left"
-            disabled={this.state.createNewColumn && this.state.newColumnInput.length === 0}
-            onClick={this.getExpressionAndApply}
-          >
-            {T.translate('features.DataPrep.Directives.apply')}
-          </button>
-
-          <button
-            className="btn btn-link float-xs-right"
-            onClick={this.setDefaultState}
-          >
-            {T.translate('features.DataPrep.Directives.cancel')}
-          </button>
-        </div>
+        {this.renderActionButtons()}
       </div>
     );
   }
 
   render() {
+    let id = 'calculate-directive';
+
     return (
-      <div
-        id="calculate-directive"
-        className={classnames('clearfix action-item', {
-          'active': this.props.isOpen
-        })}
-      >
-        <span>
-          {T.translate(`${PREFIX}.title`)}
-        </span>
+      <div>
+        <div
+          id={id}
+          className={classnames('clearfix action-item', {
+            'active': this.props.isOpen && !this.state.isDisabled,
+            'disabled': this.state.isDisabled
+          })}
+        >
+          <span>
+            {T.translate(`${PREFIX}.title`)}
+          </span>
 
-        <span className="float-xs-right">
-          <span className="fa fa-caret-right" />
-        </span>
+          <span className="float-xs-right">
+            <span className="fa fa-caret-right" />
+          </span>
 
-        {this.renderDetail()}
+          {this.renderDetail()}
+        </div>
+        {
+          this.state.isDisabled ? (
+            <UncontrolledTooltip
+              target={id}
+              delay={{show: 250, hide: 0}}
+            >
+              {T.translate(`${PREFIX}.disabledTooltip`)}
+            </UncontrolledTooltip>
+          ) : null
+        }
       </div>
     );
   }

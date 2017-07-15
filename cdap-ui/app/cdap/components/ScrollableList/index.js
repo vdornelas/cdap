@@ -55,7 +55,7 @@ export default class ScrollableList extends Component {
       heightOfList = bodyBottom - targetTop - scrollDownHeight;
     }
 
-    let numberOfElemsToDisplay = Math.floor(heightOfList / 39);
+    let numberOfElemsToDisplay = Math.floor(heightOfList / 29);
 
     let numberOfActualElements = this.props.children.filter(child => child.props.className.indexOf('column-action-divider') === -1);
 
